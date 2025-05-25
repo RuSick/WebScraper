@@ -16,6 +16,9 @@ app.config_from_object('django.conf:settings', namespace='CELERY')
 # Автоматическая загрузка задач из всех приложений
 app.autodiscover_tasks()
 
+# Явный импорт задач для обеспечения их регистрации
+app.autodiscover_tasks(['scraper'])
+
 # Настройка периодических задач
 app.conf.beat_schedule = {
     'parse-all-sources': {

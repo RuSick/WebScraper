@@ -14,24 +14,162 @@ from .parsers.universal_parser import fetch_generic_articles
 logger = logging.getLogger(__name__)
 
 @shared_task
+def parse_source(source_id: int) -> Dict[str, Any]:
+    """
+    Задача для парсинга одного источника.
+    
+    Использует универсальный парсер и отправляет каждую статью 
+    в отдельную задачу save_article для сохранения и анализа.
+    """
+    try:
+        source = Source.objects.get(id=source_id)
+        if not source.is_active:
+            logger.info(f"Source {source.name} is inactive, skipping")
+            return {'status': 'inactive', 'saved_count': 0}
+        
+        logger.info(f"Начинаем парсинг {source.name} (тип: {source.type})")
+        
+        # Используем универсальный парсер
+        articles = asyncio.run(fetch_generic_articles(source))
+        
+        if not articles:
+            logger.warning(f"Не найдено статей для {source.name}")
+            return {'status': 'no_articles', 'saved_count': 0}
+        
+        # Отправляем каждую статью в отдельную задачу сохранения
+        scheduled_count = 0
+        for article_data in articles:
+            try:
+                # Подготавливаем данные для задачи сохранения
+                save_data = {
+                    'title': article_data['title'],
+                    'content': article_data.get('content', ''),
+                    'summary': article_data.get('summary', ''),
+                    'url': article_data['url'],
+                    'published_at': article_data.get('published_at'),
+                    'source_id': source.id,
+                    'topic': article_data.get('topic', 'other')
+                }
+                
+                # Запускаем задачу сохранения асинхронно
+                save_article.delay(save_data)
+                scheduled_count += 1
+                
+            except Exception as e:
+                logger.error(f"Ошибка планирования сохранения статьи {article_data.get('url', 'unknown')}: {e}")
+                continue
+        
+        # Обновляем время последнего парсинга
+        source.last_parsed = timezone.now()
+        source.save(update_fields=['last_parsed'])
+        
+        logger.info(f"Запланировано сохранение {scheduled_count} статей из {source.name}")
+        
+        return {
+            'status': 'success',
+            'source_name': source.name,
+            'found_articles': len(articles),
+            'scheduled_count': scheduled_count
+        }
+        
+    except Source.DoesNotExist:
+        logger.error(f"Source {source_id} not found")
+        return {'status': 'not_found', 'error': f'Source {source_id} not found'}
+    except Exception as e:
+        logger.error(f"Error parsing source {source_id}: {str(e)}")
+        return {'status': 'error', 'error': str(e)}
+
+@shared_task
+def save_article(article_data: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Задача для сохранения статьи в БД.
+    
+    Проверяет уникальность по URL, сохраняет новую статью
+    и автоматически запускает анализ текста.
+    """
+    try:
+        url = article_data['url']
+        source_id = article_data['source_id']
+        
+        # Проверяем, существует ли уже статья с таким URL
+        if Article.objects.filter(url=url).exists():
+            logger.debug(f"Статья уже существует: {url}")
+            return {'status': 'duplicate', 'url': url}
+        
+        # Получаем источник
+        try:
+            source = Source.objects.get(id=source_id)
+        except Source.DoesNotExist:
+            logger.error(f"Source {source_id} not found for article {url}")
+            return {'status': 'source_not_found', 'url': url}
+        
+        # Обрабатываем дату публикации
+        published_at = article_data.get('published_at')
+        if published_at is None:
+            published_at = timezone.now()
+        elif isinstance(published_at, str):
+            try:
+                published_at = date_parser.parse(published_at)
+                # Если дата naive, делаем её aware
+                if published_at.tzinfo is None:
+                    published_at = timezone.make_aware(published_at)
+            except Exception as e:
+                logger.warning(f"Не удалось распарсить дату '{published_at}': {e}")
+                published_at = timezone.now()
+        
+        # Создаем новую статью
+        article = Article.objects.create(
+            title=article_data['title'],
+            content=article_data.get('content', ''),
+            summary=article_data.get('summary', ''),
+            url=url,
+            published_at=published_at,
+            source=source,
+            topic=article_data.get('topic', 'other'),
+            is_featured=False,
+            is_active=True,
+            is_analyzed=False  # Будет установлено в True после анализа
+        )
+        
+        logger.info(f"Сохранена новая статья: {article.title} (ID: {article.id})")
+        
+        # Обновляем счетчик статей в источнике
+        source.articles_count = source.articles.count()
+        source.save(update_fields=['articles_count'])
+        
+        # Автоматически запускаем анализ текста
+        analyze_article_text.delay(article.id)
+        
+        return {
+            'status': 'created',
+            'article_id': article.id,
+            'title': article.title,
+            'url': url,
+            'analysis_scheduled': True
+        }
+        
+    except Exception as e:
+        logger.error(f"Ошибка сохранения статьи {article_data.get('url', 'unknown')}: {str(e)}")
+        return {'status': 'error', 'error': str(e), 'url': article_data.get('url')}
+
+@shared_task
 def analyze_article_text(article_id: int) -> Dict[str, Any]:
     """
     Задача для анализа текста конкретной статьи.
     
-    Args:
-        article_id: ID статьи для анализа
-        
-    Returns:
-        Результат анализа
+    Определяет тему, теги и локации с помощью NLP-анализа
+    и сохраняет результаты в БД.
     """
     try:
         article = Article.objects.get(id=article_id)
         
         if article.is_analyzed:
             logger.info(f"Article {article_id} already analyzed, skipping")
-            return {'status': 'already_analyzed'}
+            return {'status': 'already_analyzed', 'article_id': article_id}
         
-        # Выполняем анализ
+        logger.info(f"Начинаем анализ статьи: {article.title} (ID: {article_id})")
+        
+        # Выполняем NLP-анализ
         result = analyze_article_content(article)
         
         # Обновляем статью с результатами анализа
@@ -41,14 +179,18 @@ def analyze_article_text(article_id: int) -> Dict[str, Any]:
         article.is_analyzed = True
         article.save(update_fields=['topic', 'tags', 'locations', 'is_analyzed'])
         
-        logger.info(f"Article {article_id} analyzed successfully: topic={result['topic']}, tags={len(result['tags'])}, locations={len(result['locations'])}")
+        logger.info(f"Анализ завершен для статьи {article_id}: "
+                   f"тема={result['topic']}, тегов={len(result['tags'])}, "
+                   f"локаций={len(result['locations'])}")
         
         return {
             'status': 'success',
             'article_id': article_id,
             'topic': result['topic'],
             'tags_count': len(result['tags']),
-            'locations_count': len(result['locations'])
+            'locations_count': len(result['locations']),
+            'tags': result['tags'][:5],  # Первые 5 тегов для логирования
+            'locations': result['locations'][:3]  # Первые 3 локации
         }
         
     except Article.DoesNotExist:
@@ -56,19 +198,14 @@ def analyze_article_text(article_id: int) -> Dict[str, Any]:
         return {'status': 'not_found', 'error': f'Article {article_id} not found'}
     except Exception as e:
         logger.error(f"Error analyzing article {article_id}: {str(e)}")
-        return {'status': 'error', 'error': str(e)}
-
+        return {'status': 'error', 'error': str(e), 'article_id': article_id}
 
 @shared_task
 def analyze_unanalyzed_articles(batch_size: int = 50) -> Dict[str, Any]:
     """
     Задача для анализа всех непроанализированных статей.
     
-    Args:
-        batch_size: Количество статей для обработки за раз
-        
-    Returns:
-        Статистика обработки
+    Запускает анализ для статей, которые еще не были проанализированы.
     """
     try:
         # Получаем непроанализированные статьи
@@ -108,109 +245,44 @@ def analyze_unanalyzed_articles(batch_size: int = 50) -> Dict[str, Any]:
         logger.error(f"Error in analyze_unanalyzed_articles: {str(e)}")
         return {'status': 'error', 'error': str(e)}
 
-
 @shared_task
-def parse_source(source_id: int) -> int:
+def parse_all_sources() -> Dict[str, Any]:
     """
-    Задача для парсинга одного источника.
+    Задача для парсинга всех активных источников.
     
-    Использует универсальный парсер для всех источников.
+    Запускает отдельные задачи парсинга для каждого активного источника.
     """
     try:
-        source = Source.objects.get(id=source_id)
-        if not source.is_active:
-            logger.info(f"Source {source.name} is inactive, skipping")
-            return 0
+        sources = Source.objects.filter(is_active=True)
         
-        # Используем универсальный парсер для всех источников
-        logger.info(f"Используем универсальный парсер для {source.name} (тип: {source.type})")
-        articles = asyncio.run(fetch_generic_articles(source))
+        if not sources.exists():
+            logger.info("No active sources found")
+            return {'status': 'no_sources', 'scheduled': 0}
         
-        # Сохраняем статьи
-        saved_count = save_articles(articles, source)
-        logger.info(f"Saved {saved_count} articles from {source.name}")
-        return saved_count
+        scheduled_count = 0
+        error_count = 0
+        
+        for source in sources:
+            try:
+                parse_source.delay(source.id)
+                scheduled_count += 1
+                logger.info(f"Scheduled parsing for {source.name}")
+            except Exception as e:
+                logger.error(f"Error scheduling parse for source {source.id}: {str(e)}")
+                error_count += 1
+        
+        logger.info(f"Scheduled parsing for {scheduled_count} sources, {error_count} errors")
+        
+        return {
+            'status': 'success',
+            'scheduled': scheduled_count,
+            'errors': error_count,
+            'total_sources': sources.count()
+        }
         
     except Exception as e:
-        logger.error(f"Error parsing source {source_id}: {str(e)}")
-        raise
-
-async def parse_articles(parser) -> List[Dict[str, Any]]:
-    """Асинхронный парсинг статей."""
-    async with parser as p:
-        return await p.fetch_articles()
-
-def save_articles(articles: List[Dict[str, Any]], source: Source) -> int:
-    """Сохранение статей в базу данных."""
-    saved_count = 0
-    created_article_ids = []
-    
-    for article_data in articles:
-        try:
-            # Проверяем, существует ли уже статья с таким URL
-            if Article.objects.filter(url=article_data['url']).exists():
-                continue
-            
-            # Определяем дату публикации
-            published_at = article_data.get('published_at')
-            if published_at is None:
-                published_at = timezone.now()
-            elif isinstance(published_at, str):
-                try:
-                    published_at = date_parser.parse(published_at)
-                except:
-                    published_at = timezone.now()
-            
-            # Создаем новую статью (без tone поля)
-            article = Article.objects.create(
-                title=article_data['title'],
-                content=article_data.get('content', ''),
-                summary=article_data.get('summary', ''),
-                url=article_data['url'],
-                published_at=published_at,
-                source=source,
-                topic=article_data.get('topic', 'other'),
-                is_featured=False,
-                is_active=True,
-                is_analyzed=False  # Новые статьи не проанализированы
-            )
-            saved_count += 1
-            created_article_ids.append(article.id)
-            
-        except Exception as e:
-            logger.error(f"Error saving article {article_data['url']}: {str(e)}")
-            continue
-    
-    # Обновляем счетчик статей в источнике
-    source.articles_count = source.articles.count()
-    source.last_parsed = timezone.now()
-    source.save()
-    
-    # Запускаем анализ для новых статей
-    if created_article_ids:
-        logger.info(f"Scheduling text analysis for {len(created_article_ids)} new articles")
-        for article_id in created_article_ids:
-            analyze_article_text.delay(article_id)
-    
-    return saved_count
-
-@shared_task
-def parse_all_sources():
-    """Задача для парсинга всех активных источников."""
-    sources = Source.objects.filter(is_active=True)
-    scheduled_tasks = 0
-    
-    for source in sources:
-        try:
-            # Запускаем задачу парсинга асинхронно
-            parse_source.delay(source.id)
-            scheduled_tasks += 1
-            logger.info(f"Scheduled parsing for source {source.name} (ID: {source.id})")
-        except Exception as e:
-            logger.error(f"Error scheduling parse for source {source.id}: {str(e)}")
-    
-    logger.info(f"Scheduled parsing for {scheduled_tasks} sources")
-    return scheduled_tasks
+        logger.error(f"Error in parse_all_sources: {str(e)}")
+        return {'status': 'error', 'error': str(e)}
 
 @shared_task
 def collect_habr_articles(include_content=True, max_articles=20):

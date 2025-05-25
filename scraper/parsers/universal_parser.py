@@ -517,6 +517,92 @@ class UniversalNewsParser:
             return bool(parsed.scheme and parsed.netloc)
         except Exception:
             return False
+    
+    def _is_valid_article_url(self, url: str, base_url: str) -> bool:
+        """Расширенная проверка валидности URL статьи."""
+        if not self._is_valid_url(url):
+            return False
+        
+        # Исключаем служебные и технические URL
+        excluded_patterns = [
+            r'/comments?/?$',           # Страницы комментариев
+            r'/users?/?$',              # Страницы пользователей
+            r'/user/',                  # Профили пользователей
+            r'/sandbox/?$',             # Песочница
+            r'/company/?$',             # Корпоративные страницы
+            r'/companies/?$',           # Список компаний
+            r'/promo/?$',               # Промо страницы
+            r'/advertising/?$',         # Реклама
+            r'/newsletters?/?$',        # Рассылки
+            r'/login/?$',               # Страницы входа
+            r'/signup/?$',              # Страницы регистрации
+            r'/register/?$',            # Регистрация
+            r'/auth/?$',                # Авторизация
+            r'/search/?$',              # Поиск
+            r'/tags?/?$',               # Теги
+            r'/categories?/?$',         # Категории
+            r'/archive/?$',             # Архив
+            r'/about/?$',               # О сайте
+            r'/contact/?$',             # Контакты
+            r'/privacy/?$',             # Политика конфиденциальности
+            r'/terms/?$',               # Условия использования
+            r'/help/?$',                # Помощь
+            r'/faq/?$',                 # FAQ
+            r'/feed/?$',                # RSS ленты
+            r'/rss/?$',                 # RSS
+            r'/sitemap',                # Карта сайта
+            r'/robots\.txt$',           # robots.txt
+            r'/favicon\.ico$',          # favicon
+            r'\.css$',                  # CSS файлы
+            r'\.js$',                   # JavaScript файлы
+            r'\.json$',                 # JSON файлы
+            r'\.xml$',                  # XML файлы
+            r'/api/',                   # API endpoints
+            r'/admin/',                 # Админка
+            r'/static/',                # Статические файлы
+            r'/media/',                 # Медиа файлы
+            r'/uploads/',               # Загрузки
+            r'/images?/',               # Изображения
+            r'/img/',                   # Изображения
+            r'/css/',                   # CSS
+            r'/js/',                    # JavaScript
+            r'/fonts?/',                # Шрифты
+            r'/docs/',                  # Документация
+            # Специфичные для Habr
+            r'/hello-startup/?$',       # Стартапам
+            r'/education-programs/?$',  # Образовательные программы
+            r'/native-special/?$',      # Нативные проекты
+            r'/corporate-blogs/?$',     # Корпоративные блоги
+            r'/info/confidential',      # Конфиденциальность
+            # Общие паттерны
+            r'#',                       # Якоря
+            r'\?.*$',                   # Query параметры (опционально)
+        ]
+        
+        url_lower = url.lower()
+        for pattern in excluded_patterns:
+            if re.search(pattern, url_lower):
+                logger.debug(f"URL исключён по паттерну '{pattern}': {url}")
+                return False
+        
+        # Проверяем, что URL ведёт на тот же домен или поддомен
+        try:
+            base_domain = urlparse(base_url).netloc.lower()
+            url_domain = urlparse(url).netloc.lower()
+            
+            # Разрешаем только тот же домен (исключаем поддомены соцсетей)
+            if url_domain != base_domain:
+                # Разрешаем только новостные поддомены
+                allowed_subdomains = ['www', 'news', 'sport', 'rsport', 'ria', 'russian']
+                subdomain = url_domain.split('.')[0] if '.' in url_domain else ''
+                
+                if not (url_domain.endswith('.' + base_domain) and subdomain in allowed_subdomains):
+                    logger.debug(f"URL исключён как внешний домен: {url}")
+                    return False
+        except Exception:
+            return False
+        
+        return True
 
 
 async def fetch_generic_articles(source: SourceProtocol) -> List[Dict[str, Any]]:

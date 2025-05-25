@@ -7,11 +7,15 @@ from django.db.models import Count, Q
 from django.utils import timezone
 from datetime import timedelta
 from collections import Counter
+import logging
 from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample, OpenApiResponse
 from drf_spectacular.types import OpenApiTypes
 
+logger = logging.getLogger(__name__)
+
 from core.models import Source, Article
-from scraper.tasks import parse_source  # Добавляем импорт задачи парсинга
+from scraper.tasks import parse_source as parse_source_task, parse_all_sources as parse_all_sources_task, analyze_unanalyzed_articles
+from celery.result import AsyncResult
 from .serializers import (
     SourceListSerializer, SourceDetailSerializer, SourceCreateUpdateSerializer,
     ArticleListSerializer, ArticleDetailSerializer, ArticleCreateUpdateSerializer,
@@ -630,24 +634,195 @@ def toggle_article_featured(request, pk):
 @extend_schema(
     tags=['sources'],
     summary="Запустить парсинг источника",
-    description="Запускает парсинг указанного источника и возвращает результаты парсинга."
+    description="""
+    Запускает парсинг указанного источника новостей через Celery задачу.
+    
+    Возвращает информацию о запущенной задаче.
+    """,
+    request=None,
+    responses={
+        200: {
+            'type': 'object',
+            'properties': {
+                'message': {'type': 'string'},
+                'source_name': {'type': 'string'},
+                'task_id': {'type': 'string'},
+                'status': {'type': 'string'}
+            }
+        },
+        404: {
+            'type': 'object',
+            'properties': {
+                'error': {'type': 'string'}
+            }
+        }
+    }
 )
 @api_view(['POST'])
-def parse_source_view(request, pk):
-    """Запустить парсинг источника."""
+def parse_source(request, pk):
+    """Запуск парсинга конкретного источника через Celery."""
+    try:
+        source = Source.objects.get(pk=pk)
+    except Source.DoesNotExist:
+        return Response({
+            'error': f'Источник с ID {pk} не найден'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    if not source.is_active:
+        return Response({
+            'error': f'Источник "{source.name}" неактивен'
+        }, status=status.HTTP_400_BAD_REQUEST)
     
     try:
-        source = Source.objects.get(pk=pk, is_active=True)
-    except Source.DoesNotExist:
-        return Response(
-            {'error': 'Источник не найден или не активен'}, 
-            status=status.HTTP_404_NOT_FOUND
-        )
+        # Запускаем Celery задачу
+        task = parse_source_task.delay(source.id)
+        
+        return Response({
+            'message': f'Парсинг источника "{source.name}" запущен',
+            'source_name': source.name,
+            'task_id': task.id,
+            'status': 'started'
+        })
+        
+    except Exception as e:
+        return Response({
+            'error': f'Ошибка при запуске парсинга: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@extend_schema(
+    tags=['sources'],
+    summary="Запустить парсинг всех источников",
+    description="""
+    Запускает парсинг всех активных источников новостей через Celery задачи.
     
-    # Запускаем задачу парсинга
-    parse_source.delay(source.id)
-    
-    return Response({
-        'success': True,
-        'message': 'Парсинг источника запущен'
-    })
+    Возвращает информацию о запущенных задачах.
+    """,
+    request=None,
+    responses={
+        200: {
+            'type': 'object',
+            'properties': {
+                'message': {'type': 'string'},
+                'sources_count': {'type': 'integer'},
+                'task_ids': {'type': 'array', 'items': {'type': 'string'}},
+                'status': {'type': 'string'}
+            }
+        }
+    }
+)
+@api_view(['POST'])
+def parse_all_sources(request):
+    """Запуск парсинга всех активных источников через Celery."""
+    try:
+        # Получаем все активные источники
+        sources = Source.objects.filter(is_active=True)
+        
+        if not sources.exists():
+            return Response({
+                'message': 'Нет активных источников для парсинга',
+                'sources_count': 0,
+                'task_ids': [],
+                'status': 'no_sources'
+            })
+        
+        # Запускаем задачи для каждого источника
+        task_ids = []
+        for source in sources:
+            try:
+                task = parse_source_task.delay(source.id)
+                task_ids.append(task.id)
+            except Exception as e:
+                logger.error(f"Ошибка запуска парсинга для {source.name}: {e}")
+                continue
+        
+        return Response({
+            'message': f'Запущен парсинг {len(task_ids)} источников',
+            'sources_count': len(task_ids),
+            'task_ids': task_ids,
+            'status': 'started'
+        })
+        
+    except Exception as e:
+        return Response({
+            'error': f'Ошибка при запуске парсинга: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@extend_schema(
+    tags=['tasks'],
+    summary="Статус задачи",
+    description="""
+    Возвращает статус выполнения Celery задачи.
+    """,
+    responses={
+        200: {
+            'type': 'object',
+            'properties': {
+                'task_id': {'type': 'string'},
+                'status': {'type': 'string'},
+                'result': {'type': 'object'},
+                'error': {'type': 'string'}
+            }
+        }
+    }
+)
+@api_view(['GET'])
+def task_status(request, task_id):
+    """Получение статуса Celery задачи."""
+    try:
+        task = AsyncResult(task_id)
+        
+        response_data = {
+            'task_id': task_id,
+            'status': task.status,
+        }
+        
+        if task.ready():
+            if task.successful():
+                response_data['result'] = task.result
+            else:
+                response_data['error'] = str(task.result)
+        
+        return Response(response_data)
+        
+    except Exception as e:
+        return Response({
+            'error': f'Ошибка получения статуса задачи: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@extend_schema(
+    tags=['analysis'],
+    summary="Запустить анализ статей",
+    description="""
+    Запускает анализ всех непроанализированных статей через Celery задачу.
+    """,
+    responses={
+        200: {
+            'type': 'object',
+            'properties': {
+                'message': {'type': 'string'},
+                'task_id': {'type': 'string'},
+                'status': {'type': 'string'}
+            }
+        }
+    }
+)
+@api_view(['POST'])
+def analyze_articles(request):
+    """Запуск анализа непроанализированных статей."""
+    try:
+        # Запускаем Celery задачу анализа
+        task = analyze_unanalyzed_articles.delay()
+        
+        return Response({
+            'message': 'Анализ статей запущен',
+            'task_id': task.id,
+            'status': 'started'
+        })
+        
+    except Exception as e:
+        return Response({
+            'error': f'Ошибка при запуске анализа: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
