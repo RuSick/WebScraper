@@ -21,11 +21,6 @@ def article_list(request):
     if topic_filter:
         articles = articles.filter(topic=topic_filter)
     
-    # Фильтрация по тону
-    tone_filter = request.GET.get('tone', '')
-    if tone_filter:
-        articles = articles.filter(tone=tone_filter)
-    
     # Фильтрация по источнику
     source_filter = request.GET.get('source', '')
     if source_filter:
@@ -44,18 +39,15 @@ def article_list(request):
     # Данные для фильтров
     sources = Source.objects.filter(is_active=True)
     topics = Article.TOPIC_CHOICES
-    tones = Article.TONE_CHOICES
     
     context = {
         'page_obj': page_obj,
         'search_query': search_query,
         'topic_filter': topic_filter,
-        'tone_filter': tone_filter,
         'source_filter': source_filter,
         'featured_filter': featured_filter,
         'sources': sources,
         'topics': topics,
-        'tones': tones,
         'total_count': paginator.count,
     }
     
