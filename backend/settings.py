@@ -37,13 +37,16 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    'corsheaders',
     'rest_framework',
     'django_filters',
+    'drf_spectacular',
     'core',
     'api',
 ]
 
 MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -58,7 +61,7 @@ ROOT_URLCONF = 'backend.urls'
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [],
+        'DIRS': [BASE_DIR / 'templates'],
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -123,6 +126,17 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = 'static/'
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',
+]
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# CORS settings (для фронтенда)
+CORS_ALLOW_ALL_ORIGINS = True  # Только для разработки
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.2/ref/settings/#default-auto-field
@@ -154,8 +168,41 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',  # Для демо - открытый доступ
     ],
+    'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DATETIME_FORMAT': '%Y-%m-%d %H:%M:%S',
     'DATE_FORMAT': '%Y-%m-%d',
+}
+
+# =============================================================================
+# DRF SPECTACULAR (OpenAPI/Swagger) CONFIGURATION
+# =============================================================================
+
+SPECTACULAR_SETTINGS = {
+    'TITLE': 'MediaScope API',
+    'DESCRIPTION': 'REST API для новостной платформы MediaScope. '
+                   'Предоставляет доступ к статьям, источникам новостей, '
+                   'поиску, фильтрации и аналитике.',
+    'VERSION': '1.0.0',
+    'SERVE_INCLUDE_SCHEMA': False,
+    'COMPONENT_SPLIT_REQUEST': True,
+    'SCHEMA_PATH_PREFIX': '/api/',
+    'TAGS': [
+        {'name': 'articles', 'description': 'Операции со статьями'},
+        {'name': 'sources', 'description': 'Операции с источниками новостей'},
+        {'name': 'stats', 'description': 'Статистика и аналитика'},
+        {'name': 'search', 'description': 'Поиск и рекомендации'},
+    ],
+    'CONTACT': {
+        'name': 'MediaScope Support',
+        'email': 'support@mediascope.local',
+    },
+    'LICENSE': {
+        'name': 'MIT License',
+    },
+    'EXTERNAL_DOCS': {
+        'description': 'Документация проекта',
+        'url': 'https://github.com/RuSick/WebScraper',
+    },
 }
 
 # =============================================================================

@@ -1,5 +1,6 @@
 from django.db import models
 from django.core.validators import URLValidator
+from django.contrib.postgres.fields import ArrayField
 
 
 class Source(models.Model):
@@ -68,25 +69,29 @@ class Source(models.Model):
 
 class Article(models.Model):
     """Модель новостной статьи."""
-    
-    TONE_CHOICES = [
-        ('positive', 'Позитивная'),
-        ('neutral', 'Нейтральная'),
-        ('negative', 'Негативная'),
-    ]
 
     TOPIC_CHOICES = [
         ('politics', 'Политика'),
-        ('business', 'Бизнес'),
+        ('economics', 'Экономика'),
         ('technology', 'Технологии'),
-        ('sports', 'Спорт'),
-        ('entertainment', 'Развлечения'),
         ('science', 'Наука'),
-        ('health', 'Здоровье'),
-        ('world', 'Мир'),
-        ('society', 'Общество'),
+        ('sports', 'Спорт'),
         ('culture', 'Культура'),
-        ('other', 'Другое'),
+        ('health', 'Здоровье'),
+        ('education', 'Образование'),
+        ('environment', 'Экология'),
+        ('society', 'Общество'),
+        ('war', 'Война и конфликты'),
+        ('international', 'Международные отношения'),
+        ('business', 'Бизнес'),
+        ('finance', 'Финансы'),
+        ('entertainment', 'Развлечения'),
+        ('travel', 'Путешествия'),
+        ('food', 'Еда'),
+        ('fashion', 'Мода'),
+        ('auto', 'Автомобили'),
+        ('real_estate', 'Недвижимость'),
+        ('other', 'Прочее'),
     ]
 
     title = models.CharField(
@@ -121,19 +126,33 @@ class Article(models.Model):
     )
     
     # Аналитические поля
-    tone = models.CharField(
-        max_length=10, 
-        choices=TONE_CHOICES, 
-        default='neutral',
-        verbose_name="Тональность",
-        help_text="Эмоциональная тональность статьи"
-    )
     topic = models.CharField(
         max_length=20,
         choices=TOPIC_CHOICES,
         default='other',
         verbose_name="Тема",
-        help_text="Основная тема статьи"
+        help_text="Основная тема статьи (определяется автоматически)"
+    )
+    tags = ArrayField(
+        models.CharField(max_length=100),
+        default=list,
+        blank=True,
+        verbose_name="Теги",
+        help_text="Ключевые слова и фразы (определяются автоматически)"
+    )
+    locations = ArrayField(
+        models.CharField(max_length=100),
+        default=list,
+        blank=True,
+        verbose_name="Локации",
+        help_text="Географические упоминания (определяются автоматически)"
+    )
+    
+    # Флаги обработки
+    is_analyzed = models.BooleanField(
+        default=False,
+        verbose_name="Проанализирована",
+        help_text="Был ли проведен автоматический анализ текста"
     )
     
     # Технические поля
@@ -163,8 +182,8 @@ class Article(models.Model):
         indexes = [
             models.Index(fields=['published_at']),
             models.Index(fields=['topic']),
-            models.Index(fields=['tone']),
             models.Index(fields=['source']),
+            models.Index(fields=['is_analyzed']),
         ]
 
     def __str__(self):

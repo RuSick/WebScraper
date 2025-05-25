@@ -6,6 +6,9 @@ from django_filters.rest_framework import DjangoFilterBackend
 from django.db.models import Count, Q
 from django.utils import timezone
 from datetime import timedelta
+from collections import Counter
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
+from drf_spectacular.types import OpenApiTypes
 
 from core.models import Source, Article
 from .serializers import (
@@ -22,12 +25,107 @@ class StandardResultsSetPagination(PageNumberPagination):
     max_page_size = 100
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=['articles'],
+        summary="Получить список статей",
+        description="""
+        Возвращает список статей с поддержкой поиска, фильтрации и сортировки.
+        
+        **Поиск**: используйте параметр `search` для поиска по заголовку, контенту и краткому содержанию.
+        
+        **Фильтрация**: 
+        - По теме: `topic=technology`
+        - По источнику: `source=1` или `source_name=habr`
+        - По тегам: `tags=python,javascript`
+        - По локациям: `locations=москва,россия`
+        - По дате: `published_at__gte=2025-01-01`
+        - Рекомендуемые: `featured=true`
+        - Проанализированные: `analyzed=true`
+        - За сегодня: `today=true`
+        - За неделю: `this_week=true`
+        
+        **Сортировка**: используйте параметр `ordering` с значениями `published_at`, `created_at`, `read_count`
+        """,
+        parameters=[
+            OpenApiParameter(
+                name='search',
+                description='Поиск по заголовку, контенту и краткому содержанию',
+                required=False,
+                type=OpenApiTypes.STR,
+            ),
+            OpenApiParameter(
+                name='topic',
+                description='Фильтр по теме статьи',
+                required=False,
+                type=OpenApiTypes.STR,
+                enum=['politics', 'economics', 'technology', 'science', 'sports', 'culture',
+                      'health', 'education', 'environment', 'society', 'war', 'international',
+                      'business', 'finance', 'entertainment', 'travel', 'food', 'fashion',
+                      'auto', 'real_estate', 'other']
+            ),
+            OpenApiParameter(
+                name='tags',
+                description='Фильтр по тегам (через запятую)',
+                required=False,
+                type=OpenApiTypes.STR,
+            ),
+            OpenApiParameter(
+                name='locations',
+                description='Фильтр по локациям (через запятую)',
+                required=False,
+                type=OpenApiTypes.STR,
+            ),
+            OpenApiParameter(
+                name='featured',
+                description='Только рекомендуемые статьи',
+                required=False,
+                type=OpenApiTypes.BOOL,
+            ),
+            OpenApiParameter(
+                name='analyzed',
+                description='Только проанализированные статьи',
+                required=False,
+                type=OpenApiTypes.BOOL,
+            ),
+            OpenApiParameter(
+                name='today',
+                description='Статьи за сегодня',
+                required=False,
+                type=OpenApiTypes.BOOL,
+            ),
+            OpenApiParameter(
+                name='this_week',
+                description='Статьи за эту неделю',
+                required=False,
+                type=OpenApiTypes.BOOL,
+            ),
+        ],
+        examples=[
+            OpenApiExample(
+                'Поиск по Python',
+                value={'search': 'python'},
+                request_only=True,
+            ),
+            OpenApiExample(
+                'Технологические статьи из Москвы',
+                value={'topic': 'technology', 'locations': 'москва'},
+                request_only=True,
+            ),
+        ]
+    ),
+    create=extend_schema(
+        tags=['articles'],
+        summary="Создать новую статью",
+        description="Создает новую статью с проверкой уникальности URL."
+    )
+)
 class ArticleListCreateView(generics.ListCreateAPIView):
     """
     Список статей с поиском и фильтрацией + создание новых статей.
     
-    Поиск по: title, content, summary
-    Фильтры: topic, tone, source, is_featured, published_at
+    Поиск по: title, content, summary, tags, locations
+    Фильтры: topic, source, is_featured, is_analyzed, published_at
     Сортировка: published_at, created_at, read_count
     """
     queryset = Article.objects.filter(is_active=True).select_related('source')
@@ -35,15 +133,15 @@ class ArticleListCreateView(generics.ListCreateAPIView):
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
     
     # Поиск по полям
-    search_fields = ['title', 'content', 'summary']
+    search_fields = ['title', 'content', 'summary', 'tags', 'locations']
     
     # Фильтрация
     filterset_fields = {
         'topic': ['exact', 'in'],
-        'tone': ['exact', 'in'],
         'source': ['exact'],
         'source__name': ['icontains'],
         'is_featured': ['exact'],
+        'is_analyzed': ['exact'],
         'published_at': ['gte', 'lte', 'date'],
         'created_at': ['gte', 'lte', 'date'],
     }
@@ -76,14 +174,58 @@ class ArticleListCreateView(generics.ListCreateAPIView):
         if self.request.query_params.get('featured'):
             queryset = queryset.filter(is_featured=True)
         
+        # Фильтр "проанализированные"
+        if self.request.query_params.get('analyzed'):
+            queryset = queryset.filter(is_analyzed=True)
+        
         # Фильтр по источнику (slug)
         source_name = self.request.query_params.get('source_name')
         if source_name:
             queryset = queryset.filter(source__name__icontains=source_name)
+        
+        # Фильтр по тегам
+        tags = self.request.query_params.get('tags')
+        if tags:
+            tag_list = [tag.strip().lower() for tag in tags.split(',')]
+            q_objects = Q()
+            for tag in tag_list:
+                q_objects |= Q(tags__icontains=tag)
+            queryset = queryset.filter(q_objects)
+        
+        # Фильтр по локациям
+        locations = self.request.query_params.get('locations')
+        if locations:
+            location_list = [loc.strip().lower() for loc in locations.split(',')]
+            q_objects = Q()
+            for location in location_list:
+                q_objects |= Q(locations__icontains=location)
+            queryset = queryset.filter(q_objects)
             
         return queryset
 
 
+@extend_schema_view(
+    retrieve=extend_schema(
+        tags=['articles'],
+        summary="Получить статью",
+        description="Возвращает детальную информацию о статье и увеличивает счетчик просмотров."
+    ),
+    update=extend_schema(
+        tags=['articles'],
+        summary="Обновить статью",
+        description="Полное обновление статьи."
+    ),
+    partial_update=extend_schema(
+        tags=['articles'],
+        summary="Частично обновить статью",
+        description="Частичное обновление полей статьи."
+    ),
+    destroy=extend_schema(
+        tags=['articles'],
+        summary="Удалить статью",
+        description="Удаляет статью из базы данных."
+    )
+)
 class ArticleDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
     Детальная информация о статье + редактирование + удаление.
@@ -96,14 +238,29 @@ class ArticleDetailView(generics.RetrieveUpdateDestroyAPIView):
         return ArticleDetailSerializer
     
     def retrieve(self, request, *args, **kwargs):
-        """При получении статьи увеличиваем счетчик просмотров."""
+        """Получение статьи с увеличением счетчика просмотров."""
         instance = self.get_object()
+        
         # Увеличиваем счетчик просмотров
-        Article.objects.filter(pk=instance.pk).update(read_count=instance.read_count + 1)
+        instance.read_count += 1
+        instance.save(update_fields=['read_count'])
+        
         serializer = self.get_serializer(instance)
         return Response(serializer.data)
 
 
+@extend_schema_view(
+    list=extend_schema(
+        tags=['sources'],
+        summary="Получить список источников",
+        description="Возвращает список всех источников с поддержкой поиска и фильтрации."
+    ),
+    create=extend_schema(
+        tags=['sources'],
+        summary="Создать новый источник",
+        description="Создает новый источник с проверкой уникальности URL."
+    )
+)
 class SourceListCreateView(generics.ListCreateAPIView):
     """
     Список источников + создание новых источников.
@@ -136,6 +293,28 @@ class SourceListCreateView(generics.ListCreateAPIView):
         return SourceListSerializer
 
 
+@extend_schema_view(
+    retrieve=extend_schema(
+        tags=['sources'],
+        summary="Получить источник",
+        description="Возвращает детальную информацию об источнике с последними статьями."
+    ),
+    update=extend_schema(
+        tags=['sources'],
+        summary="Обновить источник",
+        description="Полное обновление источника."
+    ),
+    partial_update=extend_schema(
+        tags=['sources'],
+        summary="Частично обновить источник",
+        description="Частичное обновление полей источника."
+    ),
+    destroy=extend_schema(
+        tags=['sources'],
+        summary="Удалить источник",
+        description="Удаляет источник из базы данных."
+    )
+)
 class SourceDetailView(generics.RetrieveUpdateDestroyAPIView):
     """
     Детальная информация об источнике + редактирование + удаление.
@@ -148,141 +327,238 @@ class SourceDetailView(generics.RetrieveUpdateDestroyAPIView):
         return SourceDetailSerializer
 
 
+@extend_schema(
+    tags=['stats'],
+    summary="Статистика по статьям",
+    description="""
+    Возвращает подробную статистику по статьям:
+    - Общее количество статей
+    - Количество рекомендуемых статей
+    - Количество проанализированных статей  
+    - Распределение по темам
+    - Топ-10 источников по количеству статей
+    - Топ тегов и локаций
+    - Количество статей за последние 24 часа
+    """,
+    responses=ArticleStatsSerializer
+)
 @api_view(['GET'])
 def articles_stats(request):
-    """
-    Статистика по статьям.
+    """Статистика по статьям."""
     
-    GET /api/stats/articles/
-    """
-    # Основная статистика
+    # Основные счетчики
     total_articles = Article.objects.filter(is_active=True).count()
     featured_articles = Article.objects.filter(is_active=True, is_featured=True).count()
-    
-    # Статистика по темам
-    topics_stats = Article.objects.filter(is_active=True).values('topic').annotate(
-        count=Count('id')
-    ).order_by('-count')
-    articles_by_topic = {item['topic']: item['count'] for item in topics_stats}
-    
-    # Статистика по тональности
-    tone_stats = Article.objects.filter(is_active=True).values('tone').annotate(
-        count=Count('id')
-    ).order_by('-count')
-    articles_by_tone = {item['tone']: item['count'] for item in tone_stats}
-    
-    # Статистика по источникам (топ-10)
-    source_stats = Article.objects.filter(is_active=True).values('source__name').annotate(
-        count=Count('id')
-    ).order_by('-count')[:10]
-    articles_by_source = {item['source__name']: item['count'] for item in source_stats}
+    analyzed_articles = Article.objects.filter(is_active=True, is_analyzed=True).count()
+    total_sources = Source.objects.filter(is_active=True).count()
     
     # Статьи за последние 24 часа
-    yesterday = timezone.now() - timedelta(days=1)
+    yesterday = timezone.now() - timedelta(hours=24)
     recent_articles_count = Article.objects.filter(
-        is_active=True, 
+        is_active=True,
         created_at__gte=yesterday
     ).count()
     
-    stats_data = {
-        'total_articles': total_articles,
-        'featured_articles': featured_articles,
-        'articles_by_topic': articles_by_topic,
-        'articles_by_tone': articles_by_tone,
-        'articles_by_source': articles_by_source,
-        'recent_articles_count': recent_articles_count,
-    }
-    
-    serializer = ArticleStatsSerializer(stats_data)
-    return Response(serializer.data)
-
-
-@api_view(['GET'])
-def sources_stats(request):
-    """
-    Статистика по источникам.
-    
-    GET /api/stats/sources/
-    """
-    # Основная статистика
-    total_sources = Source.objects.count()
-    active_sources = Source.objects.filter(is_active=True).count()
-    
-    # Статистика по типам
-    type_stats = Source.objects.values('type').annotate(
+    # Распределение по темам
+    topics = Article.objects.filter(is_active=True).values('topic').annotate(
         count=Count('id')
     ).order_by('-count')
-    sources_by_type = {item['type']: item['count'] for item in type_stats}
     
-    # Топ источников по количеству статей
-    top_sources = Source.objects.filter(is_active=True).order_by('-articles_count')[:10]
-    top_sources_data = [
-        {'name': source.name, 'articles_count': source.articles_count}
-        for source in top_sources
-    ]
+    articles_by_topic = {}
+    for topic in topics:
+        topic_label = dict(Article.TOPIC_CHOICES).get(topic['topic'], topic['topic'])
+        articles_by_topic[topic_label] = topic['count']
     
-    stats_data = {
-        'total_sources': total_sources,
-        'active_sources': active_sources,
-        'sources_by_type': sources_by_type,
-        'top_sources': top_sources_data,
-    }
+    # Топ источников
+    sources = Article.objects.filter(is_active=True).values(
+        'source__name'
+    ).annotate(count=Count('id')).order_by('-count')[:10]
     
-    serializer = SourceStatsSerializer(stats_data)
-    return Response(serializer.data)
-
-
-@api_view(['GET'])
-def search_everything(request):
-    """
-    Универсальный поиск по статьям и источникам.
+    articles_by_source = {}
+    for source in sources:
+        articles_by_source[source['source__name']] = source['count']
     
-    GET /api/search/?q=запрос
-    """
-    query = request.query_params.get('q', '').strip()
+    # Топ тегов
+    all_tags = []
+    articles_with_tags = Article.objects.filter(is_active=True, is_analyzed=True).exclude(tags=[])
+    for article in articles_with_tags:
+        if article.tags:
+            all_tags.extend(article.tags)
     
-    if not query:
-        return Response({
-            'articles': [],
-            'sources': [],
-            'total_found': 0
-        })
+    tag_counter = Counter(all_tags)
+    top_tags = [{'tag': tag, 'count': count} for tag, count in tag_counter.most_common(15)]
     
-    # Поиск по статьям
-    articles = Article.objects.filter(
-        is_active=True
-    ).filter(
-        Q(title__icontains=query) | 
-        Q(content__icontains=query) |
-        Q(summary__icontains=query)
-    ).select_related('source')[:20]
+    # Топ локаций
+    all_locations = []
+    articles_with_locations = Article.objects.filter(is_active=True, is_analyzed=True).exclude(locations=[])
+    for article in articles_with_locations:
+        if article.locations:
+            all_locations.extend(article.locations)
     
-    # Поиск по источникам
-    sources = Source.objects.filter(
-        Q(name__icontains=query) |
-        Q(description__icontains=query)
-    )[:10]
+    location_counter = Counter(all_locations)
+    top_locations = [{'location': loc, 'count': count} for loc, count in location_counter.most_common(15)]
     
     return Response({
-        'articles': ArticleListSerializer(articles, many=True).data,
-        'sources': SourceListSerializer(sources, many=True).data,
-        'total_found': len(articles) + len(sources)
+        'total_articles': total_articles,
+        'total_sources': total_sources,
+        'featured_articles': featured_articles,
+        'analyzed_articles': analyzed_articles,
+        'articles_by_topic': articles_by_topic,
+        'articles_by_source': articles_by_source,
+        'recent_articles_count': recent_articles_count,
+        'top_tags': top_tags,
+        'top_locations': top_locations,
     })
 
 
+@extend_schema(
+    tags=['stats'],
+    summary="Статистика по источникам",
+    description="""
+    Возвращает подробную статистику по источникам:
+    - Общее количество источников
+    - Количество активных источников
+    - Распределение по типам источников
+    - Топ-10 источников по количеству статей
+    """,
+    responses=SourceStatsSerializer
+)
+@api_view(['GET'])
+def sources_stats(request):
+    """Статистика по источникам."""
+    
+    # Основные счетчики
+    total_sources = Source.objects.count()
+    active_sources = Source.objects.filter(is_active=True).count()
+    
+    # Распределение по типам
+    types = Source.objects.values('type').annotate(count=Count('id')).order_by('-count')
+    
+    sources_by_type = {}
+    for source_type in types:
+        type_label = dict(Source.TYPE_CHOICES).get(source_type['type'], source_type['type'])
+        sources_by_type[type_label] = source_type['count']
+    
+    # Топ источников по количеству статей
+    top_sources_data = Source.objects.annotate(
+        real_articles_count=Count('articles', filter=Q(articles__is_active=True))
+    ).order_by('-real_articles_count')[:10]
+    
+    top_sources = []
+    for source in top_sources_data:
+        top_sources.append({
+            'name': source.name,
+            'articles_count': source.real_articles_count,
+            'type': source.get_type_display(),
+            'is_active': source.is_active
+        })
+    
+    return Response({
+        'total_sources': total_sources,
+        'active_sources': active_sources,
+        'sources_by_type': sources_by_type,
+        'top_sources': top_sources,
+    })
+
+
+@extend_schema(
+    tags=['search'],
+    summary="Универсальный поиск",
+    description="""
+    Выполняет поиск по статьям и источникам одновременно.
+    
+    Поиск осуществляется по:
+    - Заголовкам, контенту и краткому содержанию статей
+    - Тегам и локациям статей
+    - Названиям и описаниям источников
+    
+    Возвращает до 20 статей и 10 источников.
+    """,
+    parameters=[
+        OpenApiParameter(
+            name='q',
+            description='Поисковый запрос',
+            required=True,
+            type=OpenApiTypes.STR,
+        ),
+    ],
+    examples=[
+        OpenApiExample(
+            'Поиск Python',
+            value={'q': 'python'},
+            request_only=True,
+        ),
+        OpenApiExample(
+            'Поиск Москва',
+            value={'q': 'москва'},
+            request_only=True,
+        ),
+    ]
+)
+@api_view(['GET'])
+def search_everything(request):
+    """Универсальный поиск по статьям и источникам."""
+    
+    query = request.GET.get('q', '').strip()
+    
+    if not query:
+        return Response({
+            'error': 'Параметр "q" обязателен'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    
+    # Поиск по статьям
+    articles_queryset = Article.objects.filter(is_active=True).select_related('source')
+    articles_q = Q(title__icontains=query) | Q(content__icontains=query) | Q(summary__icontains=query)
+    
+    # Добавляем поиск по тегам и локациям
+    articles_q |= Q(tags__icontains=query) | Q(locations__icontains=query)
+    
+    articles = articles_queryset.filter(articles_q)[:20]
+    articles_data = ArticleListSerializer(articles, many=True).data
+    
+    # Поиск по источникам
+    sources_queryset = Source.objects.all()
+    sources_q = Q(name__icontains=query) | Q(description__icontains=query)
+    sources = sources_queryset.filter(sources_q)[:10]
+    sources_data = SourceListSerializer(sources, many=True).data
+    
+    return Response({
+        'query': query,
+        'articles': {
+            'count': len(articles_data),
+            'results': articles_data
+        },
+        'sources': {
+            'count': len(sources_data),
+            'results': sources_data
+        }
+    })
+
+
+@extend_schema(
+    tags=['search'],
+    summary="Популярные статьи",
+    description="""
+    Возвращает список популярных статей за последнюю неделю,
+    отсортированных по количеству просмотров.
+    
+    Ограничено 20 статьями.
+    """,
+)
 @api_view(['GET'])
 def trending_articles(request):
-    """
-    Популярные статьи (по количеству просмотров за последнюю неделю).
+    """Популярные статьи за последнюю неделю."""
     
-    GET /api/trending/
-    """
     week_ago = timezone.now() - timedelta(days=7)
     
-    trending = Article.objects.filter(
+    articles = Article.objects.filter(
         is_active=True,
         published_at__gte=week_ago
-    ).order_by('-read_count')[:20]
+    ).select_related('source').order_by('-read_count')[:20]
     
-    serializer = ArticleListSerializer(trending, many=True)
-    return Response(serializer.data)
+    serializer = ArticleListSerializer(articles, many=True)
+    
+    return Response({
+        'count': len(serializer.data),
+        'results': serializer.data
+    })

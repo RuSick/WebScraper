@@ -100,14 +100,14 @@ class ArticleAdmin(admin.ModelAdmin):
     """Админка для статей."""
     
     list_display = [
-        'title_short', 'source', 'topic_badge', 'tone_badge', 
+        'title_short', 'source', 'topic_badge', 'analysis_status_badge', 
         'published_at', 'read_count', 'is_featured_badge'
     ]
     list_filter = [
-        'topic', 'tone', 'is_featured', 'is_active', 
+        'topic', 'is_analyzed', 'is_featured', 'is_active', 
         'source', 'published_at', 'created_at'
     ]
-    search_fields = ['title', 'content', 'summary']
+    search_fields = ['title', 'content', 'summary', 'tags', 'locations']
     readonly_fields = ['created_at', 'updated_at', 'read_count']
     date_hierarchy = 'published_at'
     
@@ -118,8 +118,12 @@ class ArticleAdmin(admin.ModelAdmin):
         ('Контент', {
             'fields': ('summary', 'content'),
         }),
-        ('Категоризация', {
-            'fields': ('topic', 'tone', 'is_featured', 'is_active')
+        ('Автоматический анализ', {
+            'fields': ('topic', 'tags', 'locations', 'is_analyzed'),
+            'description': 'Поля заполняются автоматически при анализе текста'
+        }),
+        ('Настройки', {
+            'fields': ('is_featured', 'is_active')
         }),
         ('Статистика', {
             'fields': ('read_count',),
@@ -131,7 +135,7 @@ class ArticleAdmin(admin.ModelAdmin):
         }),
     )
     
-    actions = ['mark_as_featured', 'unmark_as_featured', 'activate_articles', 'deactivate_articles']
+    actions = ['mark_as_featured', 'unmark_as_featured', 'activate_articles', 'deactivate_articles', 'analyze_articles']
 
     def title_short(self, obj):
         """Сокращенный заголовок."""
@@ -141,17 +145,27 @@ class ArticleAdmin(admin.ModelAdmin):
     def topic_badge(self, obj):
         """Цветной бейдж темы."""
         colors = {
-            'politics': '#dc3545',      # красный
-            'business': '#28a745',      # зеленый
-            'technology': '#007bff',    # синий
-            'sports': '#fd7e14',        # оранжевый
-            'entertainment': '#e83e8c', # розовый
-            'science': '#6f42c1',       # фиолетовый
-            'health': '#20c997',        # бирюзовый
-            'world': '#ffc107',         # желтый
-            'society': '#6c757d',       # серый
-            'culture': '#17a2b8',       # голубой
-            'other': '#343a40',         # темно-серый
+            'politics': '#dc3545',        # красный
+            'economics': '#28a745',       # зеленый
+            'technology': '#007bff',      # синий
+            'science': '#6f42c1',         # фиолетовый
+            'sports': '#fd7e14',          # оранжевый
+            'culture': '#17a2b8',         # голубой
+            'health': '#20c997',          # бирюзовый
+            'education': '#6c757d',       # серый
+            'environment': '#198754',     # темно-зеленый
+            'society': '#adb5bd',         # светло-серый
+            'war': '#842029',             # темно-красный
+            'international': '#0f5132',   # темно-зеленый
+            'business': '#155724',        # темно-зеленый
+            'finance': '#0a3622',         # очень темно-зеленый
+            'entertainment': '#e83e8c',   # розовый
+            'travel': '#ffc107',          # желтый
+            'food': '#fd7e14',            # оранжевый
+            'fashion': '#e83e8c',         # розовый
+            'auto': '#495057',            # темно-серый
+            'real_estate': '#6f42c1',     # фиолетовый
+            'other': '#343a40',           # темно-серый
         }
         color = colors.get(obj.topic, '#6c757d')
         return format_html(
@@ -161,25 +175,18 @@ class ArticleAdmin(admin.ModelAdmin):
         )
     topic_badge.short_description = 'Тема'
 
-    def tone_badge(self, obj):
-        """Бейдж тональности."""
-        colors = {
-            'positive': '#28a745',   # зеленый
-            'neutral': '#6c757d',    # серый
-            'negative': '#dc3545',   # красный
-        }
-        color = colors.get(obj.tone, '#6c757d')
-        icons = {
-            'positive': '😊',
-            'neutral': '😐',
-            'negative': '😞',
-        }
-        icon = icons.get(obj.tone, '😐')
-        return format_html(
-            '<span style="color: {};">{} {}</span>',
-            color, icon, obj.get_tone_display()
-        )
-    tone_badge.short_description = 'Тональность'
+    def analysis_status_badge(self, obj):
+        """Бейдж статуса анализа."""
+        if obj.is_analyzed:
+            tags_count = len(obj.tags) if obj.tags else 0
+            locations_count = len(obj.locations) if obj.locations else 0
+            return format_html(
+                '<span style="color: #28a745;">✓ Анализ ({} тегов, {} локаций)</span>',
+                tags_count, locations_count
+            )
+        else:
+            return format_html('<span style="color: #dc3545;">✗ Не проанализирована</span>')
+    analysis_status_badge.short_description = 'Анализ'
 
     def is_featured_badge(self, obj):
         """Бейдж рекомендуемой статьи."""
@@ -201,16 +208,29 @@ class ArticleAdmin(admin.ModelAdmin):
     unmark_as_featured.short_description = "Убрать из рекомендуемых"
 
     def activate_articles(self, request, queryset):
-        """Активировать статьи."""
+        """Активировать выбранные статьи."""
         count = queryset.update(is_active=True)
         self.message_user(request, f"Активировано {count} статей.")
     activate_articles.short_description = "Активировать выбранные статьи"
 
     def deactivate_articles(self, request, queryset):
-        """Деактивировать статьи."""
+        """Деактивировать выбранные статьи."""
         count = queryset.update(is_active=False)
         self.message_user(request, f"Деактивировано {count} статей.")
     deactivate_articles.short_description = "Деактивировать выбранные статьи"
+
+    def analyze_articles(self, request, queryset):
+        """Запустить анализ для выбранных статей."""
+        from scraper.tasks import analyze_article_text
+        
+        count = 0
+        for article in queryset:
+            if not article.is_analyzed:
+                analyze_article_text.delay(article.id)
+                count += 1
+        
+        self.message_user(request, f"Запущен анализ для {count} статей.")
+    analyze_articles.short_description = "Анализировать выбранные статьи"
 
 
 # Кастомизация заголовков админки

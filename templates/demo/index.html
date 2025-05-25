@@ -1,0 +1,913 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru" data-theme="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MediaScope - Интеллектуальная новостная платформа</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        /* CSS Variables for Theme Support */
+        :root {
+            --primary-hue: 240;
+            --primary-saturation: 100%;
+            --primary-lightness: 58%;
+            
+            /* Light Theme Colors */
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --bg-tertiary: #f1f5f9;
+            --bg-accent: #e2e8f0;
+            
+            --text-primary: #0f172a;
+            --text-secondary: #475569;
+            --text-tertiary: #64748b;
+            --text-muted: #94a3b8;
+            
+            --border-color: #e2e8f0;
+            --border-light: #f1f5f9;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+            
+            --gradient-primary: linear-gradient(135deg, hsl(var(--primary-hue), var(--primary-saturation), var(--primary-lightness)) 0%, hsl(280, 80%, 60%) 100%);
+            --gradient-subtle: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+        }
+
+        [data-theme="dark"] {
+            /* Dark Theme Colors */
+            --bg-primary: #0f172a;
+            --bg-secondary: #1e293b;
+            --bg-tertiary: #334155;
+            --bg-accent: #475569;
+            
+            --text-primary: #f8fafc;
+            --text-secondary: #e2e8f0;
+            --text-tertiary: #cbd5e1;
+            --text-muted: #94a3b8;
+            
+            --border-color: #334155;
+            --border-light: #475569;
+            --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
+            --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.3), 0 2px 4px -2px rgb(0 0 0 / 0.3);
+            --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.3), 0 4px 6px -4px rgb(0 0 0 / 0.3);
+            
+            --gradient-subtle: linear-gradient(135deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
+        }
+
+        /* Base Styles */
+        * {
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        /* Modern Header */
+        .app-header {
+            background: var(--gradient-primary);
+            color: white;
+            padding: 1.5rem 0;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .app-header::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: url('data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle cx="25" cy="25" r="1" fill="white" opacity="0.1"/><circle cx="75" cy="75" r="1" fill="white" opacity="0.1"/><circle cx="50" cy="10" r="0.5" fill="white" opacity="0.2"/></svg>');
+            pointer-events: none;
+        }
+
+        .app-header .container {
+            position: relative;
+            z-index: 1;
+        }
+
+        .app-title {
+            font-weight: 700;
+            font-size: 1.75rem;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .app-subtitle {
+            font-weight: 400;
+            opacity: 0.9;
+            font-size: 0.95rem;
+            margin-top: 0.25rem;
+        }
+
+        .header-stats {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+
+        .stat-badge {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 0.5rem 1rem;
+            border-radius: 50px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .stat-badge:hover {
+            background: rgba(255, 255, 255, 0.25);
+            transform: translateY(-1px);
+        }
+
+        /* Theme Toggle */
+        .theme-toggle {
+            position: fixed;
+            top: 1rem;
+            right: 1rem;
+            z-index: 1000;
+            background: var(--bg-primary);
+            border: 2px solid var(--border-color);
+            border-radius: 50px;
+            padding: 0.5rem;
+            box-shadow: var(--shadow-md);
+            transition: all 0.3s ease;
+        }
+
+        .theme-toggle:hover {
+            transform: scale(1.05);
+        }
+
+        .theme-toggle button {
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            font-size: 1.25rem;
+            cursor: pointer;
+            padding: 0.25rem;
+            border-radius: 50%;
+            transition: all 0.3s ease;
+        }
+
+        .theme-toggle button:hover {
+            background: var(--bg-accent);
+        }
+
+        /* API Links Bar */
+        .api-bar {
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            padding: 0.75rem 0;
+        }
+
+        .api-link {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.875rem;
+            font-weight: 500;
+            padding: 0.375rem 0.75rem;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .api-link:hover {
+            background: var(--bg-accent);
+            color: var(--text-primary);
+            transform: translateY(-1px);
+        }
+
+        /* Modern Search Section */
+        .search-section {
+            background: var(--gradient-subtle);
+            padding: 2rem 0;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .search-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr 1fr auto;
+            gap: 1rem;
+            align-items: end;
+        }
+
+        @media (max-width: 1200px) {
+            .search-grid {
+                grid-template-columns: 1fr 1fr;
+                gap: 1rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .search-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .form-label {
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: var(--text-secondary);
+        }
+
+        .form-control, .form-select {
+            background: var(--bg-primary);
+            border: 2px solid var(--border-color);
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            font-size: 0.875rem;
+            color: var(--text-primary);
+            transition: all 0.3s ease;
+        }
+
+        .form-control:focus, .form-select:focus {
+            border-color: hsl(var(--primary-hue), var(--primary-saturation), var(--primary-lightness));
+            box-shadow: 0 0 0 3px hsla(var(--primary-hue), var(--primary-saturation), var(--primary-lightness), 0.1);
+            outline: none;
+        }
+
+        .search-input {
+            position: relative;
+        }
+
+        .search-input .form-control {
+            padding-right: 3rem;
+        }
+
+        .search-btn {
+            position: absolute;
+            right: 0.5rem;
+            top: 50%;
+            transform: translateY(-50%);
+            background: var(--gradient-primary);
+            border: none;
+            border-radius: 8px;
+            padding: 0.5rem;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .search-btn:hover {
+            transform: translateY(-50%) scale(1.05);
+        }
+
+        /* Filter Toggle Switches */
+        .filter-toggles {
+            display: flex;
+            gap: 1rem;
+            align-items: center;
+        }
+
+        .toggle-item {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 0.5rem 1rem;
+            background: var(--bg-primary);
+            border: 2px solid var(--border-color);
+            border-radius: 50px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            user-select: none;
+        }
+
+        .toggle-item:hover {
+            border-color: hsl(var(--primary-hue), var(--primary-saturation), var(--primary-lightness));
+        }
+
+        .toggle-item.active {
+            background: hsl(var(--primary-hue), var(--primary-saturation), var(--primary-lightness));
+            color: white;
+            border-color: hsl(var(--primary-hue), var(--primary-saturation), var(--primary-lightness));
+        }
+
+        /* Active Filters Display */
+        .active-filters {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 1rem;
+            margin-bottom: 1.5rem;
+            display: none;
+        }
+
+        .active-filters.show {
+            display: block;
+        }
+
+        .filter-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: hsl(var(--primary-hue), var(--primary-saturation), var(--primary-lightness));
+            color: white;
+            padding: 0.375rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.875rem;
+            margin: 0.25rem;
+        }
+
+        .filter-pill .remove {
+            cursor: pointer;
+            opacity: 0.8;
+            transition: opacity 0.3s ease;
+        }
+
+        .filter-pill .remove:hover {
+            opacity: 1;
+        }
+
+        .clear-filters {
+            background: var(--bg-accent);
+            color: var(--text-primary);
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            margin-left: 1rem;
+            transition: all 0.3s ease;
+        }
+
+        .clear-filters:hover {
+            background: var(--border-color);
+        }
+
+        /* Modern Stats Cards */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            text-align: center;
+            box-shadow: var(--shadow-sm);
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 4px;
+            background: var(--gradient-primary);
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+
+        .stat-label {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            margin: 0;
+        }
+
+        /* Analytics Section */
+        .analytics-section {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .analytics-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        @media (max-width: 768px) {
+            .analytics-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .analytics-item h6 {
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        /* Modern Article Cards */
+        .articles-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+            gap: 1.5rem;
+        }
+
+        @media (max-width: 768px) {
+            .articles-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .article-card {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            transition: all 0.3s ease;
+            box-shadow: var(--shadow-sm);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .article-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .article-header {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            margin-bottom: 1rem;
+            gap: 1rem;
+        }
+
+        .article-title {
+            font-size: 1.125rem;
+            font-weight: 600;
+            color: var(--text-primary);
+            line-height: 1.4;
+            margin: 0;
+            text-decoration: none;
+        }
+
+        .article-title:hover {
+            color: hsl(var(--primary-hue), var(--primary-saturation), var(--primary-lightness));
+        }
+
+        .article-meta {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            flex-wrap: wrap;
+        }
+
+        .article-content {
+            color: var(--text-secondary);
+            line-height: 1.6;
+            margin-bottom: 1rem;
+            display: -webkit-box;
+            -webkit-line-clamp: 3;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .article-footer {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            margin-top: auto;
+        }
+
+        .article-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+
+        /* Modern Badges and Tags */
+        .topic-badge {
+            font-size: 0.75rem;
+            font-weight: 600;
+            padding: 0.375rem 0.75rem;
+            border-radius: 20px;
+            text-transform: uppercase;
+            letter-spacing: 0.025em;
+        }
+
+        .tag, .location {
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid var(--border-color);
+            background: var(--bg-secondary);
+            color: var(--text-secondary);
+        }
+
+        .tag:hover, .location:hover {
+            background: hsl(var(--primary-hue), var(--primary-saturation), var(--primary-lightness));
+            color: white;
+            border-color: hsl(var(--primary-hue), var(--primary-saturation), var(--primary-lightness));
+            transform: translateY(-1px);
+        }
+
+        .location {
+            background: hsl(45, 93%, 47%);
+            color: white;
+            border-color: hsl(45, 93%, 47%);
+        }
+
+        .location:hover {
+            background: hsl(45, 93%, 40%);
+            border-color: hsl(45, 93%, 40%);
+        }
+
+        /* Analysis Status */
+        .analysis-status {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            padding: 0.25rem 0.5rem;
+            border-radius: 20px;
+            font-weight: 500;
+        }
+
+        .analysis-status.analyzed {
+            background: rgba(34, 197, 94, 0.1);
+            color: rgb(34, 197, 94);
+        }
+
+        .analysis-status.not-analyzed {
+            background: rgba(239, 68, 68, 0.1);
+            color: rgb(239, 68, 68);
+        }
+
+        /* Loading State */
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 3rem;
+        }
+
+        .loading.show {
+            display: block;
+        }
+
+        .spinner {
+            width: 3rem;
+            height: 3rem;
+            border: 4px solid var(--border-light);
+            border-top: 4px solid hsl(var(--primary-hue), var(--primary-saturation), var(--primary-lightness));
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1rem;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        /* Modern Pagination */
+        .pagination-wrapper {
+            display: flex;
+            justify-content: center;
+            margin-top: 3rem;
+        }
+
+        .pagination {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+        }
+
+        .page-btn {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            color: var(--text-primary);
+            padding: 0.5rem 0.75rem;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.875rem;
+            min-width: 2.5rem;
+            text-align: center;
+        }
+
+        .page-btn:hover {
+            background: var(--bg-secondary);
+        }
+
+        .page-btn.active {
+            background: hsl(var(--primary-hue), var(--primary-saturation), var(--primary-lightness));
+            color: white;
+            border-color: hsl(var(--primary-hue), var(--primary-saturation), var(--primary-lightness));
+        }
+
+        .page-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Topic Colors */
+        .topic-politics { background: #dc2626; color: white; }
+        .topic-economics { background: #059669; color: white; }
+        .topic-technology { background: #2563eb; color: white; }
+        .topic-science { background: #7c3aed; color: white; }
+        .topic-sports { background: #ea580c; color: white; }
+        .topic-culture { background: #0891b2; color: white; }
+        .topic-health { background: #059669; color: white; }
+        .topic-education { background: #6b7280; color: white; }
+        .topic-environment { background: #166534; color: white; }
+        .topic-society { background: #9ca3af; color: white; }
+        .topic-war { background: #7f1d1d; color: white; }
+        .topic-international { background: #064e3b; color: white; }
+        .topic-business { background: #166534; color: white; }
+        .topic-finance { background: #052e16; color: white; }
+        .topic-entertainment { background: #ec4899; color: white; }
+        .topic-travel { background: #eab308; color: #1f2937; }
+        .topic-food { background: #ea580c; color: white; }
+        .topic-fashion { background: #ec4899; color: white; }
+        .topic-auto { background: #374151; color: white; }
+        .topic-real_estate { background: #7c3aed; color: white; }
+        .topic-other { background: #1f2937; color: white; }
+
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 4rem 2rem;
+            color: var(--text-secondary);
+        }
+
+        .empty-state i {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+            opacity: 0.5;
+        }
+
+        /* Smooth transitions */
+        * {
+            transition: color 0.3s ease, background-color 0.3s ease, border-color 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <!-- Theme Toggle -->
+    <div class="theme-toggle">
+        <button onclick="toggleTheme()" id="themeToggleBtn">
+            <i class="bi bi-moon"></i>
+        </button>
+    </div>
+
+    <!-- Header -->
+    <header class="app-header">
+        <div class="container">
+            <div class="row align-items-center">
+                <div class="col-lg-8">
+                    <h1 class="app-title">
+                        <i class="bi bi-bullseye"></i>
+                        MediaScope
+                    </h1>
+                    <p class="app-subtitle">Интеллектуальная новостная платформа с AI-анализом</p>
+                </div>
+                <div class="col-lg-4">
+                    <div class="header-stats justify-content-lg-end">
+                        <div class="stat-badge">
+                            <i class="bi bi-database"></i>
+                            <span>
+                                <span id="headerArticleCount">-</span> статей
+                            </span>
+                        </div>
+                        <div class="stat-badge">
+                            <i class="bi bi-cpu"></i>
+                            <span>
+                                <span id="headerAnalyzedCount">-</span> проанализировано
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- API Links -->
+    <div class="api-bar">
+        <div class="container">
+            <div class="d-flex flex-wrap gap-3">
+                <span class="text-muted fw-medium">API:</span>
+                <a href="/api/docs/" target="_blank" class="api-link">
+                    <i class="bi bi-book"></i> Swagger UI
+                </a>
+                <a href="/api/articles/" target="_blank" class="api-link">
+                    <i class="bi bi-file-text"></i> Articles
+                </a>
+                <a href="/api/stats/articles/" target="_blank" class="api-link">
+                    <i class="bi bi-graph-up"></i> Statistics
+                </a>
+                <a href="/admin/" target="_blank" class="api-link">
+                    <i class="bi bi-gear"></i> Admin
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Search and Filters -->
+    <section class="search-section">
+        <div class="container">
+            <div class="search-grid">
+                <div class="form-group">
+                    <label class="form-label">Поиск</label>
+                    <div class="search-input">
+                        <input type="text" class="form-control" id="searchInput" 
+                               placeholder="Поиск по заголовкам, контенту, тегам...">
+                        <button class="search-btn" onclick="searchArticles()">
+                            <i class="bi bi-search"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Тема</label>
+                    <select class="form-select" id="topicFilter" onchange="applyFilters()">
+                        <option value="">Все темы</option>
+                        <option value="politics">Политика</option>
+                        <option value="economics">Экономика</option>
+                        <option value="technology">Технологии</option>
+                        <option value="science">Наука</option>
+                        <option value="sports">Спорт</option>
+                        <option value="culture">Культура</option>
+                        <option value="health">Здоровье</option>
+                        <option value="education">Образование</option>
+                        <option value="environment">Экология</option>
+                        <option value="society">Общество</option>
+                        <option value="war">Война и конфликты</option>
+                        <option value="international">Международные отношения</option>
+                        <option value="business">Бизнес</option>
+                        <option value="finance">Финансы</option>
+                        <option value="entertainment">Развлечения</option>
+                        <option value="travel">Путешествия</option>
+                        <option value="food">Еда</option>
+                        <option value="fashion">Мода</option>
+                        <option value="auto">Автомобили</option>
+                        <option value="real_estate">Недвижимость</option>
+                        <option value="other">Прочее</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Теги</label>
+                    <input type="text" class="form-control" id="tagsFilter" 
+                           placeholder="python, ai, технологии" onchange="applyFilters()">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Локации</label>
+                    <input type="text" class="form-control" id="locationsFilter" 
+                           placeholder="Москва, Россия" onchange="applyFilters()">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Источник</label>
+                    <select class="form-select" id="sourceFilter" onchange="applyFilters()">
+                        <option value="">Все источники</option>
+                    </select>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Фильтры</label>
+                    <div class="filter-toggles">
+                        <div class="toggle-item" onclick="toggleFilter('featured')" id="featuredToggle">
+                            <i class="bi bi-star-fill"></i>
+                            <span>Избранные</span>
+                        </div>
+                        <div class="toggle-item" onclick="toggleFilter('analyzed')" id="analyzedToggle">
+                            <i class="bi bi-cpu"></i>
+                            <span>Анализ</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <div class="container mt-4">
+        <!-- Active Filters -->
+        <div class="active-filters" id="activeFilters">
+            <div class="d-flex align-items-center flex-wrap">
+                <span class="fw-medium me-3">Активные фильтры:</span>
+                <div id="filterPills"></div>
+                <button class="clear-filters" onclick="clearAllFilters()">
+                    <i class="bi bi-x-circle"></i> Очистить все
+                </button>
+            </div>
+        </div>
+
+        <!-- Statistics -->
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span class="stat-value" id="totalArticles">-</span>
+                <p class="stat-label">Всего статей</p>
+            </div>
+            <div class="stat-card">
+                <span class="stat-value" id="analyzedArticles">-</span>
+                <p class="stat-label">Проанализировано</p>
+            </div>
+            <div class="stat-card">
+                <span class="stat-value" id="totalSources">-</span>
+                <p class="stat-label">Источников</p>
+            </div>
+            <div class="stat-card">
+                <span class="stat-value" id="featuredCount">-</span>
+                <p class="stat-label">Избранных</p>
+            </div>
+            <div class="stat-card">
+                <span class="stat-value" id="recentCount">-</span>
+                <p class="stat-label">За сутки</p>
+            </div>
+            <div class="stat-card">
+                <span class="stat-value" id="topicsCount">-</span>
+                <p class="stat-label">Тем</p>
+            </div>
+        </div>
+
+        <!-- Analytics -->
+        <div class="analytics-section">
+            <div class="analytics-grid">
+                <div class="analytics-item">
+                    <h6><i class="bi bi-tags"></i> Популярные теги</h6>
+                    <div id="topTags">Загрузка...</div>
+                </div>
+                <div class="analytics-item">
+                    <h6><i class="bi bi-geo-alt"></i> Популярные локации</h6>
+                    <div id="topLocations">Загрузка...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading -->
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Загрузка статей...</p>
+        </div>
+
+        <!-- Articles -->
+        <div class="articles-grid" id="articlesContainer">
+            <!-- Articles will be loaded via JavaScript -->
+        </div>
+
+        <!-- Empty State -->
+        <div class="empty-state" id="emptyState" style="display: none;">
+            <i class="bi bi-search"></i>
+            <h5>Статьи не найдены</h5>
+            <p>Попробуйте изменить параметры поиска или очистить фильтры</p>
+        </div>
+
+        <!-- Pagination -->
+        <div class="pagination-wrapper">
+            <div class="pagination" id="pagination">
+                <!-- Pagination will be loaded via JavaScript -->
+            </div>
+        </div>
+    </div>
+
+    <script src="{% static 'demo/demo.js' %}"></script>
+</body>
+</html> 

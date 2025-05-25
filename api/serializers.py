@@ -38,17 +38,16 @@ class SourceDetailSerializer(serializers.ModelSerializer):
 class ArticleListSerializer(serializers.ModelSerializer):
     """Сериализатор для списка статей."""
     
-    source_name = serializers.CharField(source='source.name', read_only=True)
+    source = SourceListSerializer(read_only=True)
     topic_display = serializers.CharField(source='get_topic_display', read_only=True)
-    tone_display = serializers.CharField(source='get_tone_display', read_only=True)
     short_content = serializers.ReadOnlyField()
     
     class Meta:
         model = Article
         fields = [
-            'id', 'title', 'url', 'source_name', 'published_at',
-            'topic', 'topic_display', 'tone', 'tone_display',
-            'short_content', 'is_featured', 'read_count'
+            'id', 'title', 'url', 'source', 'published_at',
+            'topic', 'topic_display', 'tags', 'locations',
+            'short_content', 'summary', 'content', 'is_featured', 'read_count', 'is_analyzed'
         ]
 
 
@@ -57,14 +56,13 @@ class ArticleDetailSerializer(serializers.ModelSerializer):
     
     source = SourceListSerializer(read_only=True)
     topic_display = serializers.CharField(source='get_topic_display', read_only=True)
-    tone_display = serializers.CharField(source='get_tone_display', read_only=True)
     
     class Meta:
         model = Article
         fields = [
             'id', 'title', 'content', 'summary', 'url', 'source',
-            'published_at', 'topic', 'topic_display', 'tone', 'tone_display',
-            'is_featured', 'read_count', 'created_at', 'updated_at'
+            'published_at', 'topic', 'topic_display', 'tags', 'locations',
+            'is_featured', 'read_count', 'is_analyzed', 'created_at', 'updated_at'
         ]
     
     def to_representation(self, instance):
@@ -84,7 +82,7 @@ class ArticleCreateUpdateSerializer(serializers.ModelSerializer):
         model = Article
         fields = [
             'title', 'content', 'summary', 'url', 'source',
-            'published_at', 'topic', 'tone', 'is_featured', 'is_active'
+            'published_at', 'topic', 'tags', 'locations', 'is_featured', 'is_active'
         ]
     
     def validate_url(self, value):
@@ -115,10 +113,12 @@ class ArticleStatsSerializer(serializers.Serializer):
     
     total_articles = serializers.IntegerField()
     featured_articles = serializers.IntegerField()
+    analyzed_articles = serializers.IntegerField()
     articles_by_topic = serializers.DictField()
-    articles_by_tone = serializers.DictField()
     articles_by_source = serializers.DictField()
     recent_articles_count = serializers.IntegerField()
+    top_tags = serializers.ListField()
+    top_locations = serializers.ListField()
 
 
 class SourceStatsSerializer(serializers.Serializer):
