@@ -198,16 +198,19 @@ def save_articles(articles: List[Dict[str, Any]], source: Source) -> int:
 def parse_all_sources():
     """Задача для парсинга всех активных источников."""
     sources = Source.objects.filter(is_active=True)
-    total_saved = 0
+    scheduled_tasks = 0
     
     for source in sources:
         try:
-            saved = parse_source.delay(source.id)
-            total_saved += saved
+            # Запускаем задачу парсинга асинхронно
+            parse_source.delay(source.id)
+            scheduled_tasks += 1
+            logger.info(f"Scheduled parsing for source {source.name} (ID: {source.id})")
         except Exception as e:
             logger.error(f"Error scheduling parse for source {source.id}: {str(e)}")
     
-    return total_saved 
+    logger.info(f"Scheduled parsing for {scheduled_tasks} sources")
+    return scheduled_tasks
 
 @shared_task
 def collect_habr_articles(include_content=True, max_articles=20):

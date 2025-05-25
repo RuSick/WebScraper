@@ -57,4 +57,7 @@ dump.rdb
 
 # Logs
 logs/
-*.log 
+*.log
+
+# AI Assistant Documentation (internal use only)
+AI_ASSISTANT_README.md 

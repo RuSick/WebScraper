@@ -7,10 +7,11 @@ from django.db.models import Count, Q
 from django.utils import timezone
 from datetime import timedelta
 from collections import Counter
-from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample
+from drf_spectacular.utils import extend_schema, extend_schema_view, OpenApiParameter, OpenApiExample, OpenApiResponse
 from drf_spectacular.types import OpenApiTypes
 
 from core.models import Source, Article
+from scraper.tasks import parse_source  # Добавляем импорт задачи парсинга
 from .serializers import (
     SourceListSerializer, SourceDetailSerializer, SourceCreateUpdateSerializer,
     ArticleListSerializer, ArticleDetailSerializer, ArticleCreateUpdateSerializer,
@@ -561,4 +562,92 @@ def trending_articles(request):
     return Response({
         'count': len(serializer.data),
         'results': serializer.data
+    })
+
+
+@extend_schema(
+    tags=['articles'],
+    summary="Переключить статус избранного",
+    description="""
+    Переключает статус избранного для статьи.
+    
+    Если статья была в избранном - убирает из избранного.
+    Если статья не была в избранном - добавляет в избранное.
+    
+    Возвращает обновленный статус статьи.
+    """,
+    request=None,
+    responses={
+        200: OpenApiResponse(
+            description="Статус успешно изменен",
+            examples=[
+                OpenApiExample(
+                    'Добавлено в избранное',
+                    value={
+                        'success': True,
+                        'is_featured': True,
+                        'message': 'Статья добавлена в избранное'
+                    }
+                ),
+                OpenApiExample(
+                    'Удалено из избранного',
+                    value={
+                        'success': True,
+                        'is_featured': False,
+                        'message': 'Статья удалена из избранного'
+                    }
+                )
+            ]
+        ),
+        404: OpenApiResponse(description="Статья не найдена")
+    }
+)
+@api_view(['POST'])
+def toggle_article_featured(request, pk):
+    """Переключить статус избранного для статьи."""
+    
+    try:
+        article = Article.objects.get(pk=pk, is_active=True)
+    except Article.DoesNotExist:
+        return Response(
+            {'error': 'Статья не найдена'}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    # Переключаем статус
+    article.is_featured = not article.is_featured
+    article.save(update_fields=['is_featured'])
+    
+    message = 'Статья добавлена в избранное' if article.is_featured else 'Статья удалена из избранного'
+    
+    return Response({
+        'success': True,
+        'is_featured': article.is_featured,
+        'message': message
+    })
+
+
+@extend_schema(
+    tags=['sources'],
+    summary="Запустить парсинг источника",
+    description="Запускает парсинг указанного источника и возвращает результаты парсинга."
+)
+@api_view(['POST'])
+def parse_source_view(request, pk):
+    """Запустить парсинг источника."""
+    
+    try:
+        source = Source.objects.get(pk=pk, is_active=True)
+    except Source.DoesNotExist:
+        return Response(
+            {'error': 'Источник не найден или не активен'}, 
+            status=status.HTTP_404_NOT_FOUND
+        )
+    
+    # Запускаем задачу парсинга
+    parse_source.delay(source.id)
+    
+    return Response({
+        'success': True,
+        'message': 'Парсинг источника запущен'
     })

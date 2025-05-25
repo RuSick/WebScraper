@@ -143,11 +143,24 @@ def should_use_headless(html_content: str, url: str) -> bool:
 
 # Список известных SPA-сайтов для приоритетного headless-парсинга
 KNOWN_SPA_DOMAINS = [
+    # Существующие SPA-сайты
     'meduza.io',
     'tjournal.ru', 
     'vc.ru',
     'dtf.ru',
-    # Добавлять по мере обнаружения
+    
+    # 🇷🇺 Русскоязычные IT SPA-источники
+    'vc.ru',  # VC.ru - Технологии (уже есть выше)
+    
+    # 🌍 Англоязычные IT SPA-источники  
+    'techcrunch.com',           # TechCrunch - сложная SPA структура
+    'thenextweb.com',           # The Next Web - React-based SPA
+    'theverge.com',             # The Verge - Vox Media SPA
+    'venturebeat.com',          # VentureBeat - WordPress + React components
+    'huggingface.co',           # Hugging Face Blog - Next.js application
+    'dev.to',                   # Dev.to - Ruby on Rails + Preact
+    
+    # Добавлять по мере обнаружения других SPA-сайтов
 ]
 
 
