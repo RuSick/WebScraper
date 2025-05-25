@@ -1,5 +1,6 @@
 Django==4.2
 djangorestframework==3.14.0
+django-filter==23.5
 aiohttp==3.9.3
 beautifulsoup4==4.12.3
 selectolax==0.3.16
