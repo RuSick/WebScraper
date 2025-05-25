@@ -335,27 +335,311 @@ class UniversalNewsParser:
     
     def extract_content(self, container: Tag) -> Optional[str]:
         """
-        Извлечение контента статьи (опционально).
+        Улучшенное извлечение контента статьи с продвинутой обработкой.
         
         Стратегия:
-        1. Ищем специфичные контейнеры контента
-        2. Fallback на параграфы
-        3. Ограничиваем длину для предварительного просмотра
+        1. Ищем семантические контейнеры контента (article, section, main)
+        2. Фильтруем нежелательные элементы (nav, footer, aside, ads)
+        3. Извлекаем и очищаем текст с сохранением структуры
+        4. Валидируем качество контента
+        5. Возвращаем только релевантный контент
         """
-        for selector in self.content_selectors:
-            try:
-                element = container.select_one(selector)
-                if element:
-                    content = self._clean_text(element.get_text())
-                    if len(content) > 20:  # Минимальная длина контента
-                        # Ограничиваем для preview
-                        preview = content[:500] + "..." if len(content) > 500 else content
-                        logger.debug(f"Контент найден селектором '{selector}': {len(content)} символов")
-                        return preview
-            except Exception as e:
-                logger.debug(f"Ошибка в селекторе контента '{selector}': {e}")
+        
+        # Приоритетные селекторы для основного контента
+        priority_selectors = [
+            'article[itemprop="articleBody"]',  # Schema.org разметка
+            'div[itemprop="articleBody"]',
+            'section[itemprop="articleBody"]',
+            'div[class*="article-body"]',
+            'div[class*="article-content"]',
+            'div[class*="post-content"]',
+            'div[class*="entry-content"]',
+            'div[class*="content-body"]',
+            'main article',
+            'article',
+            'main section',
+            'div[role="main"]',
+        ]
+        
+        # Стандартные селекторы контента
+        standard_selectors = [
+            'div[class*="body"]', 'div[class*="text"]', 'div[class*="content"]',
+            'div[class*="description"]', 'div[class*="excerpt"]',
+            'div[class*="summary"]', 'div[class*="intro"]',
+            'section', 'main'
+        ]
+        
+        # Сначала пробуем приоритетные селекторы
+        for selector in priority_selectors:
+            content = self._extract_and_validate_content(container, selector)
+            if content:
+                logger.debug(f"Контент найден приоритетным селектором '{selector}': {len(content)} символов")
+                return content
+        
+        # Затем стандартные селекторы
+        for selector in standard_selectors:
+            content = self._extract_and_validate_content(container, selector)
+            if content:
+                logger.debug(f"Контент найден стандартным селектором '{selector}': {len(content)} символов")
+                return content
+        
+        # Fallback: извлекаем из параграфов
+        content = self._extract_from_paragraphs(container)
+        if content:
+            logger.debug(f"Контент извлечён из параграфов: {len(content)} символов")
+            return content
         
         return ""
+    
+    def _extract_and_validate_content(self, container: Tag, selector: str) -> Optional[str]:
+        """Извлечение и валидация контента по селектору."""
+        try:
+            element = container.select_one(selector)
+            if not element:
+                return None
+            
+            # Удаляем нежелательные элементы
+            cleaned_element = self._remove_unwanted_elements(element)
+            
+            # Извлекаем и очищаем текст
+            raw_text = cleaned_element.get_text(separator=' ', strip=True)
+            cleaned_text = self._advanced_text_cleaning(raw_text)
+            
+            # Валидируем качество контента
+            if self._is_valid_content(cleaned_text):
+                return cleaned_text
+            
+        except Exception as e:
+            logger.debug(f"Ошибка в селекторе контента '{selector}': {e}")
+        
+        return None
+    
+    def _extract_from_paragraphs(self, container: Tag) -> Optional[str]:
+        """Fallback: извлечение контента из параграфов."""
+        try:
+            paragraphs = container.find_all('p')
+            if not paragraphs:
+                return None
+            
+            # Собираем текст из всех параграфов
+            texts = []
+            for p in paragraphs:
+                # Пропускаем параграфы в нежелательных контейнерах
+                if self._is_in_unwanted_container(p):
+                    continue
+                
+                text = p.get_text(strip=True)
+                if text and len(text) > 10:  # Минимальная длина параграфа
+                    texts.append(text)
+            
+            if texts:
+                combined_text = ' '.join(texts)
+                cleaned_text = self._advanced_text_cleaning(combined_text)
+                
+                if self._is_valid_content(cleaned_text):
+                    return cleaned_text
+            
+        except Exception as e:
+            logger.debug(f"Ошибка извлечения из параграфов: {e}")
+        
+        return None
+    
+    def _remove_unwanted_elements(self, element: Tag) -> Tag:
+        """Удаление нежелательных элементов из контента."""
+        # Создаём копию элемента для безопасного изменения
+        element_copy = element.__copy__()
+        
+        # Селекторы нежелательных элементов
+        unwanted_selectors = [
+            'nav', 'footer', 'header', 'aside',
+            'div[class*="sidebar"]', 'div[class*="widget"]',
+            'div[class*="advertisement"]', 'div[class*="ads"]',
+            'div[class*="banner"]', 'div[class*="promo"]',
+            'div[class*="social"]', 'div[class*="share"]',
+            'div[class*="comment"]', 'div[class*="related"]',
+            'div[class*="navigation"]', 'div[class*="menu"]',
+            'script', 'style', 'noscript',
+            'form', 'input', 'button',
+            '[class*="hidden"]', '[style*="display:none"]',
+            '[class*="ad-"]', '[id*="ad-"]',
+            '.advertisement', '.ads', '.banner',
+        ]
+        
+        # Удаляем нежелательные элементы
+        for selector in unwanted_selectors:
+            try:
+                for unwanted in element_copy.select(selector):
+                    unwanted.decompose()
+            except Exception as e:
+                logger.debug(f"Ошибка удаления элементов '{selector}': {e}")
+        
+        return element_copy
+    
+    def _is_in_unwanted_container(self, element: Tag) -> bool:
+        """Проверка, находится ли элемент в нежелательном контейнере."""
+        unwanted_classes = [
+            'sidebar', 'widget', 'advertisement', 'ads', 'banner',
+            'social', 'share', 'comment', 'related', 'navigation',
+            'menu', 'footer', 'header'
+        ]
+        
+        # Проверяем родительские элементы
+        parent = element.parent
+        while parent and parent.name != 'body':
+            if parent.get('class'):
+                classes = ' '.join(parent.get('class')).lower()
+                if any(unwanted in classes for unwanted in unwanted_classes):
+                    return True
+            parent = parent.parent
+        
+        return False
+    
+    def _advanced_text_cleaning(self, text: str) -> str:
+        """Продвинутая очистка текста с сохранением структуры."""
+        if not text:
+            return ""
+        
+        # Базовая очистка
+        text = text.strip()
+        
+        # Удаляем лишние пробелы и переносы строк
+        text = re.sub(r'\s+', ' ', text)
+        
+        # Удаляем повторяющиеся знаки препинания
+        text = re.sub(r'[.]{3,}', '...', text)
+        text = re.sub(r'[!]{2,}', '!', text)
+        text = re.sub(r'[?]{2,}', '?', text)
+        
+        # Исправляем пробелы вокруг знаков препинания
+        text = re.sub(r'\s+([,.!?;:])', r'\1', text)
+        text = re.sub(r'([.!?])\s*([А-ЯA-Z])', r'\1 \2', text)
+        
+        # Удаляем служебные фразы
+        service_phrases = [
+            r'читать далее\.?\.?\.?',
+            r'подробнее\.?\.?\.?',
+            r'смотреть также\.?\.?\.?',
+            r'источник:?\s*\S+',
+            r'фото:?\s*\S+',
+            r'видео:?\s*\S+',
+            r'реклама\.?',
+            r'advertisement\.?',
+            r'sponsored\.?',
+        ]
+        
+        for pattern in service_phrases:
+            text = re.sub(pattern, '', text, flags=re.IGNORECASE)
+        
+        # Финальная очистка
+        text = re.sub(r'\s+', ' ', text).strip()
+        
+        return text
+    
+    def _is_valid_content(self, content: str) -> bool:
+        """Валидация качества контента."""
+        if not content:
+            return False
+        
+        # Увеличенная минимальная длина для более качественного контента
+        if len(content) < 100:
+            return False
+        
+        # Проверяем наличие нормальных предложений (минимум 2)
+        sentences = re.split(r'[.!?]+', content)
+        valid_sentences = [s.strip() for s in sentences if len(s.strip()) > 15]
+        
+        if len(valid_sentences) < 2:
+            return False
+        
+        # Проверяем соотношение букв к цифрам/символам
+        letters = len(re.findall(r'[а-яёА-ЯЁa-zA-Z]', content))
+        total_chars = len(content.replace(' ', ''))
+        
+        if total_chars > 0 and letters / total_chars < 0.6:
+            return False
+        
+        # Расширенный список подозрительных паттернов
+        suspicious_patterns = [
+            # Навигация и меню
+            r'^(меню|навигация|поиск|войти|регистрация)',
+            r'(главное меню|основное меню|навигация по сайту)',
+            
+            # Технические сообщения
+            r'(cookie|privacy policy|terms of service|политика конфиденциальности)',
+            r'^(404|error|ошибка|страница не найдена)',
+            r'(javascript|enable|включите|отключен)',
+            r'^(loading|загрузка|подождите)',
+            r'(maintenance|обслуживание|технические работы)',
+            
+            # Формы и регистрация
+            r'(заполните форму|введите данные|обязательные поля)',
+            r'(регистрация|авторизация|войти в систему)',
+            r'(забыли пароль|восстановление пароля)',
+            r'(подтвердите email|активация аккаунта)',
+            
+            # Социальные сети и подписки
+            r'(подписывайтесь|следите за нами|присоединяйтесь)',
+            r'(вконтакте|facebook|twitter|instagram|youtube|telegram)',
+            r'(поделиться|share|лайк|like)',
+            r'(подписка|newsletter|рассылка)',
+            
+            # Реклама и коммерция
+            r'(реклама|advertisement|sponsored|спонсор)',
+            r'(купить|заказать|скидка|акция|распродажа)',
+            r'(цена|стоимость|руб\.|₽|\$|€)',
+            
+            # Комментарии и форумы
+            r'(оставить комментарий|написать комментарий)',
+            r'(ответить|цитировать|процитировать)',
+            r'(модерация|администрация)',
+            
+            # Служебная информация
+            r'(все права защищены|copyright|копирайт)',
+            r'(обратная связь|связаться с нами|контакты)',
+            r'(помощь|поддержка|техподдержка)',
+            r'(правила|условия использования)',
+            
+            # Пустой или технический контент
+            r'^(нет данных|no data|empty|пусто)$',
+            r'^(undefined|null|none)$',
+            r'^(test|тест|demo|демо)$',
+            
+            # Короткие фразы без смысла
+            r'^(да|нет|ok|хорошо|плохо|отлично)$',
+            r'^[0-9\s\-_.,!?]+$',  # Только цифры и знаки
+        ]
+        
+        content_lower = content.lower()
+        for pattern in suspicious_patterns:
+            if re.search(pattern, content_lower):
+                logger.debug(f"Контент исключён по паттерну '{pattern}': {content[:50]}...")
+                return False
+        
+        # Проверяем на повторяющийся контент (возможно, меню или навигация)
+        words = content.split()
+        if len(words) > 10:
+            unique_words = set(words)
+            if len(unique_words) / len(words) < 0.4:  # Слишком много повторов
+                logger.debug(f"Контент исключён из-за повторов: {content[:50]}...")
+                return False
+        
+        # Проверяем наличие содержательных слов
+        meaningful_words = [w for w in words if len(w) > 3 and not w.lower() in [
+            'это', 'что', 'как', 'где', 'когда', 'почему', 'зачем',
+            'the', 'and', 'for', 'are', 'but', 'not', 'you', 'all', 'can', 'had', 'her', 'was', 'one', 'our', 'out', 'day', 'get', 'has', 'him', 'his', 'how', 'its', 'may', 'new', 'now', 'old', 'see', 'two', 'way', 'who', 'boy', 'did', 'man', 'men', 'put', 'say', 'she', 'too', 'use'
+        ]]
+        
+        if len(meaningful_words) < len(words) * 0.3:  # Минимум 30% содержательных слов
+            logger.debug(f"Контент исключён из-за недостатка содержательных слов: {content[:50]}...")
+            return False
+        
+        # Проверяем структуру текста - должны быть знаки препинания
+        punctuation_count = len(re.findall(r'[.!?,:;]', content))
+        if punctuation_count < len(sentences):  # Минимум один знак препинания на предложение
+            logger.debug(f"Контент исключён из-за отсутствия пунктуации: {content[:50]}...")
+            return False
+        
+        return True
     
     def extract_date(self, container: Tag, article_url: Optional[str] = None) -> Optional[str]:
         """
@@ -517,6 +801,275 @@ class UniversalNewsParser:
             return bool(parsed.scheme and parsed.netloc)
         except Exception:
             return False
+    
+    def _is_valid_article_url(self, url: str, base_url: str) -> bool:
+        """Расширенная проверка валидности URL статьи."""
+        if not self._is_valid_url(url):
+            return False
+        
+        # Расширенный список исключаемых служебных страниц
+        excluded_patterns = [
+            # Основные служебные страницы
+            r'/search[/?]',
+            r'/login[/?]',
+            r'/register[/?]',
+            r'/signup[/?]',
+            r'/contact[/?]',
+            r'/contacts[/?]',
+            r'/about[/?]',
+            r'/privacy[/?]',
+            r'/terms[/?]',
+            r'/policy[/?]',
+            r'/sitemap[/?]',
+            r'/rss[/?]',
+            r'/feed[/?]',
+            r'/archive[/?]',
+            r'/category[/?]',
+            r'/tag[/?]',
+            r'/author[/?]',
+            r'/user[/?]',
+            r'/profile[/?]',
+            r'/admin[/?]',
+            r'/api[/?]',
+            r'/ajax[/?]',
+            r'/json[/?]',
+            r'/xml[/?]',
+            
+            # Дополнительные служебные страницы
+            r'/help[/?]',
+            r'/support[/?]',
+            r'/faq[/?]',
+            r'/feedback[/?]',
+            r'/subscribe[/?]',
+            r'/unsubscribe[/?]',
+            r'/newsletter[/?]',
+            r'/advertising[/?]',
+            r'/ads[/?]',
+            r'/careers[/?]',
+            r'/jobs[/?]',
+            r'/press[/?]',
+            r'/media[/?]',
+            r'/partners[/?]',
+            r'/legal[/?]',
+            r'/disclaimer[/?]',
+            r'/copyright[/?]',
+            r'/dmca[/?]',
+            r'/cookies[/?]',
+            r'/gdpr[/?]',
+            r'/404[/?]',
+            r'/error[/?]',
+            r'/maintenance[/?]',
+            
+            # Социальные сети и внешние ссылки
+            r'facebook\.com',
+            r'twitter\.com',
+            r'instagram\.com',
+            r'youtube\.com',
+            r'vk\.com',
+            r'telegram\.me',
+            r't\.me',
+            r'linkedin\.com',
+            r'tiktok\.com',
+            
+            # Файлы
+            r'\.pdf$',
+            r'\.doc$',
+            r'\.docx$',
+            r'\.xls$',
+            r'\.xlsx$',
+            r'\.ppt$',
+            r'\.pptx$',
+            r'\.zip$',
+            r'\.rar$',
+            r'\.tar$',
+            r'\.gz$',
+            r'\.jpg$',
+            r'\.jpeg$',
+            r'\.png$',
+            r'\.gif$',
+            r'\.svg$',
+            r'\.webp$',
+            r'\.mp4$',
+            r'\.avi$',
+            r'\.mov$',
+            r'\.wmv$',
+            r'\.mp3$',
+            r'\.wav$',
+            r'\.flac$',
+            
+            # Якорные ссылки и фрагменты
+            r'#',
+            r'javascript:',
+            r'mailto:',
+            r'tel:',
+            
+            # Специфичные паттерны для новостных сайтов
+            r'/docs/',
+            r'/static/',
+            r'/assets/',
+            r'/images/',
+            r'/css/',
+            r'/js/',
+            r'/fonts/',
+            r'/uploads/',
+            r'/download/',
+            r'/redirect/',
+            r'/go/',
+            r'/out/',
+            r'/exit/',
+            
+            # Комментарии и форумы
+            r'/comment',
+            r'/reply',
+            r'/forum',
+            r'/discussion',
+            r'/thread',
+            
+            # Разделы без контента
+            r'/main[/?]$',
+            r'/index[/?]$',
+            r'/home[/?]$',
+            r'/$',  # Только главная страница
+        ]
+        
+        url_lower = url.lower()
+        for pattern in excluded_patterns:
+            if re.search(pattern, url_lower):
+                logger.debug(f"URL исключён по паттерну '{pattern}': {url}")
+                return False
+        
+        # Проверяем, что URL ведёт на тот же домен или поддомен
+        try:
+            base_domain = urlparse(base_url).netloc.lower()
+            url_domain = urlparse(url).netloc.lower()
+            
+            # Разрешаем только тот же домен (исключаем поддомены соцсетей)
+            if url_domain != base_domain:
+                # Разрешаем только новостные поддомены
+                allowed_subdomains = ['www', 'news', 'sport', 'rsport', 'ria', 'russian']
+                subdomain = url_domain.split('.')[0] if '.' in url_domain else ''
+                
+                if not (url_domain.endswith('.' + base_domain) and subdomain in allowed_subdomains):
+                    logger.debug(f"URL исключён как внешний домен: {url}")
+                    return False
+        except Exception:
+            return False
+        
+        return True
+    
+    def _is_valid_article(self, title: str, content: str, url: str) -> bool:
+        """Комплексная валидация качества статьи."""
+        
+        # Проверяем заголовок
+        if not self._is_valid_title(title):
+            return False
+        
+        # Проверяем минимальную длину заголовка для статьи
+        if len(title) < 10:
+            return False
+        
+        # Расширенная проверка подозрительных паттернов в заголовке
+        title_lower = title.lower()
+        suspicious_title_patterns = [
+            # Служебные страницы (русский)
+            r'^(главная|home|index)$',
+            r'^(меню|menu|навигация|navigation)$',
+            r'^(поиск|search)$',
+            r'^(войти|login|вход|авторизация)$',
+            r'^(регистрация|register|signup|зарегистрироваться)$',
+            r'(регистрация на сайте|регистрация пользователей)',
+            r'^(контакты|contact|связаться|обратная связь)$',
+            r'(связаться с нами|обратная связь|контактная информация)',
+            r'^(о нас|about|о сайте|о компании)$',
+            r'^(правила|rules|terms|условия)$',
+            r'(правила сайта|пользовательское соглашение)',
+            r'^(политика|privacy|policy|конфиденциальность)$',
+            r'^(реклама|advertisement|ads|размещение рекламы)$',
+            r'^(помощь|help|support|поддержка)$',
+            r'^(faq|часто задаваемые|вопросы и ответы)$',
+            r'^(подписка|subscribe|newsletter|рассылка)$',
+            r'^(карьера|careers|jobs|вакансии|работа)$',
+            r'^(партнёры|partners|сотрудничество)$',
+            r'^(пресс-центр|press|media|для прессы)$',
+            
+            # Ошибки и технические страницы
+            r'^(404|error|ошибка|страница не найдена)$',
+            r'^(loading|загрузка|подождите)$',
+            r'^(maintenance|обслуживание|технические работы)$',
+            
+            # Социальные сети
+            r'(вконтакте|vk|facebook|twitter|instagram|youtube|telegram)',
+            r'(подписывайтесь|следите|смотрите)',
+            r'^(подписывайтесь на нас|следите за нами)$',
+            
+            # Куки и GDPR
+            r'(cookie|куки|согласие|gdpr)',
+            
+            # Комментарии и форумы
+            r'^(комментарий|comment|ответ|reply)$',
+            r'^(обсуждение|discussion|форум|forum)$',
+            
+            # Короткие бессмысленные заголовки
+            r'^[0-9\s\-_.,!?]+$',  # Только цифры и знаки
+            r'^[a-zA-Z\s\-_.,!?]{1,3}$',  # Очень короткие латинские
+            r'^[а-яё\s\-_.,!?]{1,3}$',  # Очень короткие русские
+            
+            # Технические заголовки
+            r'^(undefined|null|none|empty|blank)$',
+            r'^(test|тест|demo|демо)$',
+            r'^(placeholder|заглушка)$',
+        ]
+        
+        for pattern in suspicious_title_patterns:
+            if re.search(pattern, title_lower):
+                logger.debug(f"Заголовок исключён по паттерну '{pattern}': {title}")
+                return False
+        
+        # Проверяем контент (если есть)
+        if content:
+            if not self._is_valid_content(content):
+                return False
+        else:
+            # Если контента нет, проверяем заголовок более строго
+            if not self._is_substantial_title(title):
+                logger.debug(f"Заголовок без контента не прошёл проверку: {title}")
+                return False
+        
+        # Проверяем соотношение букв в заголовке
+        letters = len(re.findall(r'[а-яёА-ЯЁa-zA-Z]', title))
+        if letters < len(title) * 0.5:  # Минимум 50% букв
+            logger.debug(f"Заголовок содержит слишком мало букв: {title}")
+            return False
+        
+        return True
+    
+    def _is_substantial_title(self, title: str) -> bool:
+        """Проверка, является ли заголовок содержательным (для статей без контента)."""
+        if len(title) < 15:  # Минимум 15 символов для статьи без контента
+            return False
+        
+        # Должно быть минимум 3 слова
+        words = title.split()
+        if len(words) < 3:
+            return False
+        
+        # Проверяем наличие содержательных слов (не только предлоги/союзы)
+        meaningful_words = [w for w in words if len(w) > 2]
+        if len(meaningful_words) < 2:
+            return False
+        
+        # Исключаем заголовки, состоящие только из названий разделов
+        section_words = [
+            'новости', 'news', 'главное', 'главная', 'сегодня', 'сейчас',
+            'лента', 'feed', 'все', 'all', 'последние', 'latest',
+            'архив', 'archive', 'категория', 'category', 'раздел', 'section'
+        ]
+        
+        title_words_lower = [w.lower() for w in words]
+        if all(w in section_words for w in title_words_lower if len(w) > 2):
+            return False
+        
+        return True
 
 
 async def fetch_generic_articles(source: SourceProtocol) -> List[Dict[str, Any]]:
@@ -556,23 +1109,57 @@ async def fetch_generic_articles(source: SourceProtocol) -> List[Dict[str, Any]]
         
         articles = []
         successful_extractions = 0
+        skipped_stats = {
+            'no_title': 0,
+            'no_url': 0,
+            'invalid_url': 0,
+            'no_content': 0,
+            'low_quality': 0,
+            'duplicate_url': 0
+        }
+        processed_urls = set()
         
         for i, container in enumerate(containers):
             try:
                 # Извлекаем заголовок
                 title = parser.extract_title(container)
                 if not title:
+                    skipped_stats['no_title'] += 1
                     logger.debug(f"Контейнер {i+1}: заголовок не найден, пропускаем")
                     continue
                 
                 # Извлекаем URL
                 article_url = parser.extract_url(container, source.url)
                 if not article_url:
+                    skipped_stats['no_url'] += 1
                     logger.debug(f"Контейнер {i+1}: URL не найден, пропускаем")
                     continue
                 
-                # Извлекаем контент (опционально)
+                # Проверяем валидность URL
+                if not parser._is_valid_article_url(article_url, source.url):
+                    skipped_stats['invalid_url'] += 1
+                    logger.debug(f"Контейнер {i+1}: невалидный URL {article_url}, пропускаем")
+                    continue
+                
+                # Проверяем на дубликаты URL в текущей сессии
+                if article_url in processed_urls:
+                    skipped_stats['duplicate_url'] += 1
+                    logger.debug(f"Контейнер {i+1}: дублирующийся URL {article_url}, пропускаем")
+                    continue
+                
+                processed_urls.add(article_url)
+                
+                # Извлекаем контент
                 content = parser.extract_content(container)
+                
+                # Проверяем качество статьи
+                if not parser._is_valid_article(title, content, article_url):
+                    if not content:
+                        skipped_stats['no_content'] += 1
+                    else:
+                        skipped_stats['low_quality'] += 1
+                    logger.debug(f"Контейнер {i+1}: статья не прошла валидацию качества, пропускаем")
+                    continue
                 
                 # Извлекаем дату
                 published_at = parser.extract_date(container, article_url)
@@ -595,7 +1182,16 @@ async def fetch_generic_articles(source: SourceProtocol) -> List[Dict[str, Any]]
                 logger.warning(f"Ошибка обработки контейнера {i+1}: {e}")
                 continue
         
-        logger.info(f"Универсальный парсинг {source.name} завершен: "
-                   f"{successful_extractions} статей из {len(containers)} контейнеров")
+        # Логируем детальную статистику
+        total_containers = len(containers)
+        logger.info(f"Универсальный парсинг {source.name} завершен:")
+        logger.info(f"  Обработано контейнеров: {total_containers}")
+        logger.info(f"  Успешно извлечено статей: {successful_extractions}")
+        logger.info(f"  Пропущено - нет заголовка: {skipped_stats['no_title']}")
+        logger.info(f"  Пропущено - нет URL: {skipped_stats['no_url']}")
+        logger.info(f"  Пропущено - невалидный URL: {skipped_stats['invalid_url']}")
+        logger.info(f"  Пропущено - нет контента: {skipped_stats['no_content']}")
+        logger.info(f"  Пропущено - низкое качество: {skipped_stats['low_quality']}")
+        logger.info(f"  Пропущено - дубликаты: {skipped_stats['duplicate_url']}")
         
         return articles 
