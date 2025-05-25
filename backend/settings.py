@@ -133,3 +133,24 @@ CELERY_BROKER_URL = 'redis://localhost:6379/0'
 CELERY_RESULT_BACKEND = 'redis://localhost:6379/0'
 CELERY_ACCEPT_CONTENT = ['json']
 CELERY_TASK_SERIALIZER = 'json'
+
+# =============================================================================
+# SCRAPER CONFIGURATION
+# =============================================================================
+
+# Headless browser parsing for JavaScript-heavy sites
+# Включает fallback на Playwright для SPA-сайтов (Meduza.io, TJournal.ru)
+ENABLE_HEADLESS_PARSING = False
+
+# ВНИМАНИЕ: Для активации headless-парсинга требуется:
+# 1. pip install playwright
+# 2. playwright install
+# 3. Реализация функции fetch_with_playwright() в scraper/browser/fallback_playwright.py
+# 4. Установка ENABLE_HEADLESS_PARSING = True
+
+# Headless browser timeout (seconds)
+HEADLESS_TIMEOUT = 30
+
+# Список известных SPA-сайтов будет автоматически обрабатываться через headless
+# когда ENABLE_HEADLESS_PARSING = True
+# Текущий список: meduza.io, tjournal.ru, vc.ru, dtf.ru
