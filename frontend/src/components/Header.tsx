@@ -14,6 +14,10 @@ export const Header: React.FC = () => {
       navigate(`/?search=${encodeURIComponent(searchQuery.trim())}`);
       setSearchQuery('');
     }
+    // Используем глобальный обработчик поиска
+    if ((window as any).handleGlobalSearch) {
+      (window as any).handleGlobalSearch(searchQuery);
+    }
   };
 
   return (

@@ -65,7 +65,6 @@ export const AnalyticsCards: React.FC<AnalyticsCardsProps> = ({ stats, className
                     {locationData.count}
                   </div>
                   <div className="text-sm text-gray-700 dark:text-gray-300 font-medium mt-1 flex items-center justify-center gap-1">
-                    <span>📍</span>
                     {locationData.location}
                   </div>
                 </div>

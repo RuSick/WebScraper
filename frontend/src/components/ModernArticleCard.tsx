@@ -49,13 +49,13 @@ export const ModernArticleCard: React.FC<ModernArticleCardProps> = ({
 
   const getTopicColor = (topic: string) => {
     const colors: Record<string, { bg: string; text: string; dot: string }> = {
-      technology: { bg: 'bg-blue-500/20', text: 'text-blue-300', dot: 'bg-blue-500' },
-      politics: { bg: 'bg-red-500/20', text: 'text-red-300', dot: 'bg-red-500' },
-      economics: { bg: 'bg-green-500/20', text: 'text-green-300', dot: 'bg-green-500' }, 
-      science: { bg: 'bg-purple-500/20', text: 'text-purple-300', dot: 'bg-purple-500' },
-      business: { bg: 'bg-orange-500/20', text: 'text-orange-300', dot: 'bg-orange-500' },
-      war: { bg: 'bg-gray-500/20', text: 'text-gray-300', dot: 'bg-gray-500' },
-      other: { bg: 'bg-gray-500/20', text: 'text-gray-300', dot: 'bg-gray-500' },
+      technology: { bg: 'bg-blue-500/20 dark:bg-blue-500/20', text: 'text-blue-700 dark:text-blue-300', dot: 'bg-blue-500' },
+      politics: { bg: 'bg-red-500/20 dark:bg-red-500/20', text: 'text-red-700 dark:text-red-300', dot: 'bg-red-500' },
+      economics: { bg: 'bg-green-500/20 dark:bg-green-500/20', text: 'text-green-700 dark:text-green-300', dot: 'bg-green-500' }, 
+      science: { bg: 'bg-purple-500/20 dark:bg-purple-500/20', text: 'text-purple-700 dark:text-purple-300', dot: 'bg-purple-500' },
+      business: { bg: 'bg-orange-500/20 dark:bg-orange-500/20', text: 'text-orange-700 dark:text-orange-300', dot: 'bg-orange-500' },
+      war: { bg: 'bg-gray-500/20 dark:bg-gray-500/20', text: 'text-gray-700 dark:text-gray-300', dot: 'bg-gray-500' },
+      other: { bg: 'bg-gray-500/20 dark:bg-gray-500/20', text: 'text-gray-700 dark:text-gray-300', dot: 'bg-gray-500' },
     };
     return colors[topic] || colors.other;
   };
@@ -93,7 +93,7 @@ export const ModernArticleCard: React.FC<ModernArticleCardProps> = ({
   return (
     <>
       <article 
-        className={`group relative bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl border border-slate-700/50 hover:border-slate-600/50 transition-all duration-500 hover:shadow-2xl hover:shadow-blue-500/10 cursor-pointer overflow-hidden backdrop-blur-sm h-[400px] ${className}`}
+        className={`group relative bg-gradient-to-br from-white to-gray-50 dark:from-slate-900 dark:to-slate-800 rounded-2xl border border-gray-200 dark:border-slate-700/50 hover:border-gray-300 dark:hover:border-slate-600/50 transition-all duration-500 hover:shadow-2xl hover:shadow-blue-500/10 cursor-pointer overflow-hidden backdrop-blur-sm h-[400px] ${className}`}
         onClick={() => setIsModalOpen(true)}
         style={style}
       >
@@ -102,13 +102,13 @@ export const ModernArticleCard: React.FC<ModernArticleCardProps> = ({
         
         {/* Category Badge - левый верхний угол */}
         <div className="absolute top-4 left-4 z-10">
-          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${topicColors.bg} backdrop-blur-sm border border-white/20`}>
+          <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full ${topicColors.bg} backdrop-blur-sm border border-gray-300/50 dark:border-white/20`}>
             <div className={`w-2 h-2 rounded-full ${topicColors.dot}`} />
             <span className={`text-xs font-semibold ${topicColors.text} uppercase tracking-wide`}>
               {getTopicLabel(article.topic)}
             </span>
             {article.is_analyzed && (
-              <span className="text-xs text-emerald-300">✨</span>
+              <span className="text-xs text-emerald-600 dark:text-emerald-300">✨</span>
             )}
           </div>
         </div>
@@ -116,10 +116,10 @@ export const ModernArticleCard: React.FC<ModernArticleCardProps> = ({
         {/* Favorite Button - правый верхний угол */}
         <button
           onClick={handleFavoriteClick}
-          className={`absolute top-4 right-4 z-10 p-2 rounded-full backdrop-blur-sm border border-white/20 transition-all duration-300 hover:scale-110 ${
+          className={`absolute top-4 right-4 z-10 p-2 rounded-full backdrop-blur-sm border border-gray-300/50 dark:border-white/20 transition-all duration-300 hover:scale-110 ${
             isArticleFavorite 
-              ? 'text-amber-300 bg-amber-400/20 border-amber-400/30' 
-              : 'text-slate-300 hover:text-amber-300 hover:bg-amber-400/20 hover:border-amber-400/30'
+              ? 'text-amber-600 dark:text-amber-300 bg-amber-400/20 border-amber-400/30' 
+              : 'text-gray-500 dark:text-slate-300 hover:text-amber-600 dark:hover:text-amber-300 hover:bg-amber-400/20 hover:border-amber-400/30'
           }`}
           aria-label={isArticleFavorite ? 'Удалить из избранного' : 'Добавить в избранное'}
         >
@@ -129,13 +129,13 @@ export const ModernArticleCard: React.FC<ModernArticleCardProps> = ({
         {/* Main Content - строго структурированный */}
         <div className="relative p-5 pt-16 h-full flex flex-col">
           {/* Title - показываем полностью */}
-          <h3 className="text-lg font-bold text-white mb-3 leading-tight group-hover:text-blue-300 transition-colors duration-300 min-h-[3.5rem]">
+          <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-3 leading-tight group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors duration-300 min-h-[3.5rem]">
             {article.title}
           </h3>
 
           {/* Summary - строго 3 строки */}
           <div className="mb-4 h-[4.5rem]">
-            <p className="text-slate-200 text-sm leading-relaxed line-clamp-3 h-full">
+            <p className="text-gray-700 dark:text-slate-200 text-sm leading-relaxed line-clamp-3 h-full">
               {getSummary()}
             </p>
           </div>
@@ -147,13 +147,13 @@ export const ModernArticleCard: React.FC<ModernArticleCardProps> = ({
                 {visibleTags.map((tag, index) => (
                   <span
                     key={index}
-                    className="px-3 py-1 bg-slate-800/60 text-slate-200 rounded-full text-xs border border-slate-700/60 font-medium truncate max-w-[120px]"
+                    className="px-3 py-1 bg-gray-100 dark:bg-slate-800/60 text-gray-700 dark:text-slate-200 rounded-full text-xs border border-gray-200 dark:border-slate-700/60 font-medium truncate max-w-[120px]"
                   >
                     {tag}
                   </span>
                 ))}
                 {hiddenTagsCount > 0 && (
-                  <span className="flex items-center gap-1 px-2 py-1 bg-slate-800/40 text-slate-400 rounded-full text-xs border border-slate-700/40">
+                  <span className="flex items-center gap-1 px-2 py-1 bg-gray-50 dark:bg-slate-800/40 text-gray-500 dark:text-slate-400 rounded-full text-xs border border-gray-200 dark:border-slate-700/40">
                     <Plus className="w-3 h-3" />
                     {hiddenTagsCount}
                   </span>
@@ -166,17 +166,17 @@ export const ModernArticleCard: React.FC<ModernArticleCardProps> = ({
           <div className="flex-1"></div>
 
           {/* Footer - фиксированная высота */}
-          <div className="border-t border-slate-700/50 pt-3 h-[3rem] flex items-center justify-between text-sm">
-            <div className="flex items-center gap-2 text-slate-300">
-              <Calendar className="w-4 h-4 text-slate-400" />
+          <div className="border-t border-gray-200 dark:border-slate-700/50 pt-3 h-[3rem] flex items-center justify-between text-sm">
+            <div className="flex items-center gap-2 text-gray-600 dark:text-slate-300">
+              <Calendar className="w-4 h-4 text-gray-500 dark:text-slate-400" />
               <span className="font-medium">{formatDate(article.published_at)}</span>
             </div>
 
             <div className="flex items-center gap-2">
-              <span className="text-blue-300 font-semibold truncate max-w-[120px] text-xs">
+              <span className="text-blue-600 dark:text-blue-300 font-semibold truncate max-w-[120px] text-xs">
                 {article.source.name}
               </span>
-              <ExternalLink className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+              <ExternalLink className="w-3 h-3 text-gray-500 dark:text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
             </div>
           </div>
         </div>

@@ -1,15 +1,25 @@
 import React, { useState } from 'react';
-import { Tag, MapPin, Globe, BarChart3, TrendingUp } from 'lucide-react';
+import { Tag, MapPin, Globe, BarChart3 } from 'lucide-react';
 import { ArticleStats } from '../types/api';
 
 interface CompactAnalyticsProps {
   stats?: ArticleStats;
   className?: string;
+  onFilterChange?: (filterType: 'topic' | 'search', value: string) => void;
+  activeFilters?: {
+    topic?: string;
+    search?: string;
+  };
 }
 
 type TabType = 'overview' | 'tags' | 'locations' | 'sources';
 
-export const CompactAnalytics: React.FC<CompactAnalyticsProps> = ({ stats, className = '' }) => {
+export const CompactAnalytics: React.FC<CompactAnalyticsProps> = ({ 
+  stats, 
+  className = '', 
+  onFilterChange,
+  activeFilters = {}
+}) => {
   const [activeTab, setActiveTab] = useState<TabType>('overview');
 
   if (!stats) {
@@ -39,10 +49,28 @@ export const CompactAnalytics: React.FC<CompactAnalyticsProps> = ({ stats, class
 
   const tabs = [
     { id: 'overview' as TabType, label: 'Обзор', icon: BarChart3 },
-    { id: 'tags' as TabType, label: 'Теги', icon: Tag, count: topTags.length },
-    { id: 'locations' as TabType, label: 'Места', icon: MapPin, count: topLocations.length },
-    { id: 'sources' as TabType, label: 'Источники', icon: Globe, count: topSources.length },
+    { id: 'tags' as TabType, label: 'Теги', icon: Tag },
+    { id: 'locations' as TabType, label: 'Места', icon: MapPin },
+    { id: 'sources' as TabType, label: 'Источники', icon: Globe },
   ];
+
+  const handleTopicClick = (topic: string) => {
+    if (onFilterChange) {
+      onFilterChange('topic', topic);
+    }
+  };
+
+  const handleTagClick = (tag: string) => {
+    if (onFilterChange) {
+      onFilterChange('search', tag);
+    }
+  };
+
+  const handleLocationClick = (location: string) => {
+    if (onFilterChange) {
+      onFilterChange('search', location);
+    }
+  };
 
   const renderOverview = () => (
     <div className="space-y-3">
@@ -68,59 +96,96 @@ export const CompactAnalytics: React.FC<CompactAnalyticsProps> = ({ stats, class
         {Object.entries(stats.articles_by_topic || {})
           .sort(([, a], [, b]) => b - a)
           .slice(0, 3)
-          .map(([topic, count]) => (
-            <div key={topic} className="flex items-center justify-between text-sm">
-              <span className="text-gray-600 dark:text-gray-400 capitalize truncate">
-                {topic === 'technology' ? '💻 Технологии' :
-                 topic === 'politics' ? '🏛️ Политика' :
-                 topic === 'economics' ? '📈 Экономика' :
-                 topic === 'science' ? '🔬 Наука' :
-                 topic === 'business' ? '💼 Бизнес' :
-                 topic === 'war' ? '⚔️ Война' :
-                 `📰 ${topic}`}
-              </span>
-              <span className="font-medium text-gray-900 dark:text-white">{count}</span>
-            </div>
-          ))}
+          .map(([topic, count]) => {
+            const isActive = activeFilters.topic === topic;
+            const topicLabel = topic === 'technology' ? 'Технологии' :
+                             topic === 'politics' ? 'Политика' :
+                             topic === 'economics' ? 'Экономика' :
+                             topic === 'science' ? 'Наука' :
+                             topic === 'business' ? 'Бизнес' :
+                             topic === 'war' ? 'Война' :
+                             topic;
+            
+            return (
+              <button
+                key={topic}
+                onClick={() => handleTopicClick(topic)}
+                className={`w-full flex items-center justify-between text-sm p-2 rounded-lg transition-all duration-200 ${
+                  isActive 
+                    ? 'bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-300' 
+                    : 'hover:bg-gray-100 dark:hover:bg-dark-700'
+                }`}
+              >
+                <span className="text-gray-600 dark:text-gray-400 capitalize truncate">
+                  {topicLabel}
+                </span>
+                <span className="font-medium text-gray-900 dark:text-white">{count}</span>
+              </button>
+            );
+          })}
       </div>
     </div>
   );
 
   const renderTags = () => (
     <div className="space-y-2">
-      {topTags.map((tagData, index) => (
-        <div key={index} className="flex items-center justify-between p-2 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-          <span className="text-sm text-gray-700 dark:text-gray-300 truncate flex-1">
-            {tagData.tag}
-          </span>
-          <span className="text-sm font-medium text-blue-600 dark:text-blue-400 ml-2">
-            {tagData.count}
-          </span>
-        </div>
-      ))}
+      {topTags.map((tagData, index) => {
+        const isActive = activeFilters.search === tagData.tag;
+        return (
+          <button
+            key={index}
+            onClick={() => handleTagClick(tagData.tag)}
+            className={`w-full flex items-center justify-between p-2 rounded-lg transition-all duration-200 ${
+              isActive 
+                ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800' 
+                : 'bg-blue-50 dark:bg-blue-900/20 hover:bg-blue-100 dark:hover:bg-blue-900/30'
+            }`}
+          >
+            <span className="text-sm text-gray-700 dark:text-gray-300 truncate flex-1 text-left">
+              {tagData.tag}
+            </span>
+            <span className="text-sm font-medium text-blue-600 dark:text-blue-400 ml-2">
+              {tagData.count}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 
   const renderLocations = () => (
     <div className="space-y-2">
-      {topLocations.map((locationData, index) => (
-        <div key={index} className="flex items-center justify-between p-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
-          <span className="text-sm text-gray-700 dark:text-gray-300 truncate flex-1 flex items-center gap-1">
-            <span>📍</span>
-            {locationData.location}
-          </span>
-          <span className="text-sm font-medium text-green-600 dark:text-green-400 ml-2">
-            {locationData.count}
-          </span>
-        </div>
-      ))}
+      {topLocations.map((locationData, index) => {
+        const isActive = activeFilters.search === locationData.location;
+        return (
+          <button
+            key={index}
+            onClick={() => handleLocationClick(locationData.location)}
+            className={`w-full flex items-center justify-between p-2 rounded-lg transition-all duration-200 ${
+              isActive 
+                ? 'bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800' 
+                : 'bg-green-50 dark:bg-green-900/20 hover:bg-green-100 dark:hover:bg-green-900/30'
+            }`}
+          >
+            <span className="text-sm text-gray-700 dark:text-gray-300 truncate flex-1 flex items-center gap-1 text-left">
+              {locationData.location}
+            </span>
+            <span className="text-sm font-medium text-green-600 dark:text-green-400 ml-2">
+              {locationData.count}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 
   const renderSources = () => (
     <div className="space-y-2">
       {topSources.map(([sourceName, count], index) => (
-        <div key={index} className="flex items-center justify-between p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+        <div
+          key={index}
+          className="flex items-center justify-between p-2 bg-purple-50 dark:bg-purple-900/20 rounded-lg"
+        >
           <span className="text-sm text-gray-700 dark:text-gray-300 truncate flex-1">
             {sourceName}
           </span>
@@ -174,11 +239,6 @@ export const CompactAnalytics: React.FC<CompactAnalyticsProps> = ({ stats, class
                 title={tab.label}
               >
                 <Icon className="w-3 h-3" />
-                {tab.count !== undefined && (
-                  <span className="bg-gray-200 dark:bg-dark-600 text-gray-600 dark:text-gray-400 text-xs rounded-full px-1.5 py-0.5 min-w-[16px] text-center">
-                    {tab.count}
-                  </span>
-                )}
               </button>
             );
           })}

@@ -26,7 +26,6 @@ export const ArticleFilters: React.FC<ArticleFiltersProps> = ({
 
   const sortOptions = [
     { value: 'published_at', label: 'По дате' },
-    { value: 'read_count', label: 'По популярности' },
     { value: 'title', label: 'По названию' },
   ];
 
