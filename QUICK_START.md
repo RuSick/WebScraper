@@ -65,3 +65,5 @@ npm run lint-frontend
 ---
 
 **Примечание:** Убедитесь, что активирована виртуальная среда Python (`news-env`) перед запуском. 
+
+ps aux | grep -E "(react-scripts|manage.py)" | grep -v grep

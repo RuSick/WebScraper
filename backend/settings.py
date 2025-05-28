@@ -39,10 +39,12 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'corsheaders',
     'rest_framework',
+    'rest_framework.authtoken',  # Поддержка токенов
     'django_filters',
     'drf_spectacular',
     'core',
     'api',
+    'accounts',  # Новое приложение для пользователей
 ]
 
 MIDDLEWARE = [
@@ -168,6 +170,10 @@ REST_FRAMEWORK = {
         'rest_framework.renderers.JSONRenderer',
         'rest_framework.renderers.BrowsableAPIRenderer',
     ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.TokenAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.AllowAny',  # Для демо - открытый доступ
     ],
@@ -242,3 +248,10 @@ SPACY_MODEL_NAME = 'ru_core_news_sm'
 
 # Fallback to legacy analyzer if spaCy fails
 SPACY_FALLBACK_ENABLED = True
+
+# Custom User Model
+AUTH_USER_MODEL = 'accounts.User'
+
+# Media files (для аватаров пользователей)
+MEDIA_URL = '/media/'
+MEDIA_ROOT = BASE_DIR / 'media'
