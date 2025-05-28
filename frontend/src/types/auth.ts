@@ -57,22 +57,94 @@ export interface SubscriptionPlan {
   slug: string;
   plan_type: 'free' | 'basic' | 'premium' | 'enterprise';
   description: string;
-  price: string;
+  price: number;
   billing_period: 'monthly' | 'yearly' | 'lifetime';
   features: string[];
   is_popular: boolean;
+  is_active: boolean;
+  limits: {
+    daily_articles: number | null; // null = unlimited
+    favorites: number | null;
+    exports: number | null;
+    api_calls: number | null;
+  };
+  created_at: string;
+  updated_at: string;
 }
 
 export interface UserSubscription {
   id: number;
+  user: number;
   plan: SubscriptionPlan;
   status: 'active' | 'expired' | 'cancelled' | 'pending';
   start_date: string;
-  end_date: string;
-  is_active: boolean;
-  days_remaining: number;
+  end_date: string | null;
   auto_renewal: boolean;
   created_at: string;
+  updated_at: string;
+}
+
+// Usage tracking types
+export interface UsageStats {
+  daily_articles_read: number;
+  daily_articles_limit: number | null;
+  favorites_count: number;
+  favorites_limit: number | null;
+  exports_count: number;
+  exports_limit: number | null;
+  api_calls_count: number;
+  api_calls_limit: number | null;
+  reset_date: string; // когда сбросятся дневные лимиты
+}
+
+// Payment types
+export interface PaymentMethod {
+  id: string;
+  type: 'card' | 'bank_transfer' | 'crypto';
+  last_four?: string;
+  brand?: string;
+  expires?: string;
+  is_default: boolean;
+}
+
+export interface PaymentIntent {
+  id: string;
+  amount: number;
+  currency: 'BYN' | 'USD' | 'EUR';
+  status: 'pending' | 'processing' | 'succeeded' | 'failed';
+  payment_method: string;
+  client_secret?: string;
+}
+
+// Subscription context types
+export interface SubscriptionContextType {
+  currentSubscription: UserSubscription | null;
+  usageStats: UsageStats | null;
+  availablePlans: SubscriptionPlan[];
+  isLoading: boolean;
+  error: string | null;
+  
+  // Actions
+  loadSubscriptionData: () => Promise<void>;
+  upgradePlan: (planId: number) => Promise<PaymentIntent>;
+  cancelSubscription: () => Promise<void>;
+  checkLimit: (feature: 'articles' | 'favorites' | 'exports' | 'api') => boolean;
+  getRemainingLimit: (feature: 'articles' | 'favorites' | 'exports' | 'api') => number | null;
+}
+
+// API response types
+export interface SubscriptionDashboardData {
+  subscription: UserSubscription | null;
+  usage: UsageStats;
+  plans: SubscriptionPlan[];
+  payment_methods: PaymentMethod[];
+  recent_payments: Array<{
+    id: string;
+    amount: number;
+    currency: string;
+    status: string;
+    created_at: string;
+  }>;
 }
 
 // Favorite articles

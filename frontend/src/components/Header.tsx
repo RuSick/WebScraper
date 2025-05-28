@@ -4,6 +4,7 @@ import { Search, Newspaper, Moon, Sun, User, LogOut, Settings, Heart, CreditCard
 import { useTheme } from '../contexts/ThemeContext';
 import { useAuth } from '../contexts/AuthContext';
 import AuthModal from './auth/AuthModal';
+import UsageLimits from './subscription/UsageLimits';
 
 export const Header: React.FC = () => {
   const navigate = useNavigate();
@@ -90,6 +91,14 @@ export const Header: React.FC = () => {
 
             {/* Actions */}
             <div className="flex items-center gap-4">
+              {/* Usage Limits for authenticated users */}
+              {isAuthenticated && (
+                <UsageLimits 
+                  compact={true} 
+                  onUpgrade={() => navigate('/pricing')}
+                />
+              )}
+
               {/* Mobile Search */}
               <div className="md:hidden">
                 <form onSubmit={handleSearch}>

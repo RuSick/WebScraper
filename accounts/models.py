@@ -176,17 +176,36 @@ class SubscriptionPlan(models.Model):
     )
     
     # Лимиты и возможности
-    max_api_requests_per_day = models.PositiveIntegerField(
-        default=100,
-        verbose_name="Лимит API запросов в день"
+    daily_articles_limit = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Лимит статей в день",
+        help_text="null = безлимит"
     )
-    max_saved_articles = models.PositiveIntegerField(
-        default=50,
-        verbose_name="Лимит сохраненных статей"
+    favorites_limit = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Лимит избранных статей",
+        help_text="null = безлимит"
     )
-    max_custom_sources = models.PositiveIntegerField(
-        default=0,
-        verbose_name="Лимит пользовательских источников"
+    exports_limit = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Лимит экспортов в месяц",
+        help_text="null = безлимит"
+    )
+    api_calls_limit = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Лимит API вызовов в день",
+        help_text="null = безлимит"
+    )
+    
+    # Список функций (для отображения на фронтенде)
+    features = models.JSONField(
+        default=list,
+        verbose_name="Список функций",
+        help_text="Массив строк с описанием возможностей плана"
     )
     
     # Премиум функции
@@ -487,3 +506,290 @@ class APIUsageLog(models.Model):
 
     def __str__(self):
         return f"{self.user.username} - {self.method} {self.endpoint}"
+
+
+class UsageTracking(models.Model):
+    """Отслеживание использования лимитов пользователем."""
+    
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='usage_tracking',
+        verbose_name="Пользователь"
+    )
+    
+    # Дневные лимиты (сбрасываются каждый день)
+    daily_articles_read = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Статей прочитано сегодня"
+    )
+    daily_api_calls = models.PositiveIntegerField(
+        default=0,
+        verbose_name="API вызовов сегодня"
+    )
+    
+    # Месячные лимиты (сбрасываются каждый месяц)
+    monthly_exports = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Экспортов в этом месяце"
+    )
+    
+    # Общие счетчики
+    total_favorites = models.PositiveIntegerField(
+        default=0,
+        verbose_name="Всего избранных статей"
+    )
+    
+    # Даты сброса
+    last_daily_reset = models.DateField(
+        auto_now_add=True,
+        verbose_name="Последний сброс дневных лимитов"
+    )
+    last_monthly_reset = models.DateField(
+        auto_now_add=True,
+        verbose_name="Последний сброс месячных лимитов"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создан")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Обновлен")
+
+    class Meta:
+        verbose_name = "Отслеживание использования"
+        verbose_name_plural = "Отслеживание использования"
+
+    def __str__(self):
+        return f"Использование {self.user.get_full_name()}"
+
+    def reset_daily_limits(self):
+        """Сбрасывает дневные лимиты."""
+        today = timezone.now().date()
+        if self.last_daily_reset < today:
+            self.daily_articles_read = 0
+            self.daily_api_calls = 0
+            self.last_daily_reset = today
+            self.save()
+
+    def reset_monthly_limits(self):
+        """Сбрасывает месячные лимиты."""
+        today = timezone.now().date()
+        if self.last_monthly_reset.month != today.month or self.last_monthly_reset.year != today.year:
+            self.monthly_exports = 0
+            self.last_monthly_reset = today
+            self.save()
+
+    def increment_articles_read(self):
+        """Увеличивает счетчик прочитанных статей."""
+        self.reset_daily_limits()
+        self.daily_articles_read += 1
+        self.save()
+
+    def increment_api_calls(self):
+        """Увеличивает счетчик API вызовов."""
+        self.reset_daily_limits()
+        self.daily_api_calls += 1
+        self.save()
+
+    def increment_exports(self):
+        """Увеличивает счетчик экспортов."""
+        self.reset_monthly_limits()
+        self.monthly_exports += 1
+        self.save()
+
+    def increment_favorites(self):
+        """Увеличивает счетчик избранных."""
+        self.total_favorites += 1
+        self.save()
+
+    def decrement_favorites(self):
+        """Уменьшает счетчик избранных."""
+        if self.total_favorites > 0:
+            self.total_favorites -= 1
+            self.save()
+
+
+class PaymentMethod(models.Model):
+    """Способы оплаты пользователя."""
+    
+    TYPE_CHOICES = [
+        ('card', 'Банковская карта'),
+        ('bank_transfer', 'Банковский перевод'),
+        ('crypto', 'Криптовалюта'),
+        ('mobile', 'Мобильные платежи'),
+    ]
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='payment_methods',
+        verbose_name="Пользователь"
+    )
+    type = models.CharField(
+        max_length=20,
+        choices=TYPE_CHOICES,
+        verbose_name="Тип платежа"
+    )
+    
+    # Для карт
+    last_four = models.CharField(
+        max_length=4,
+        blank=True,
+        verbose_name="Последние 4 цифры"
+    )
+    card_brand = models.CharField(
+        max_length=20,
+        blank=True,
+        verbose_name="Бренд карты"
+    )
+    expires_month = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Месяц истечения"
+    )
+    expires_year = models.PositiveIntegerField(
+        null=True,
+        blank=True,
+        verbose_name="Год истечения"
+    )
+    
+    # Общие поля
+    provider_id = models.CharField(
+        max_length=100,
+        verbose_name="ID у провайдера платежей"
+    )
+    is_default = models.BooleanField(
+        default=False,
+        verbose_name="По умолчанию"
+    )
+    is_active = models.BooleanField(
+        default=True,
+        verbose_name="Активен"
+    )
+    
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создан")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Обновлен")
+
+    class Meta:
+        verbose_name = "Способ оплаты"
+        verbose_name_plural = "Способы оплаты"
+        ordering = ['-is_default', '-created_at']
+
+    def __str__(self):
+        if self.type == 'card' and self.last_four:
+            return f"{self.card_brand} ****{self.last_four}"
+        return f"{self.get_type_display()}"
+
+
+class PaymentHistory(models.Model):
+    """История платежей пользователя."""
+    
+    STATUS_CHOICES = [
+        ('pending', 'Ожидает'),
+        ('processing', 'Обрабатывается'),
+        ('succeeded', 'Успешно'),
+        ('failed', 'Неудачно'),
+        ('cancelled', 'Отменен'),
+        ('refunded', 'Возвращен'),
+    ]
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='payment_history',
+        verbose_name="Пользователь"
+    )
+    subscription = models.ForeignKey(
+        UserSubscription,
+        on_delete=models.CASCADE,
+        related_name='payments',
+        verbose_name="Подписка"
+    )
+    payment_method = models.ForeignKey(
+        PaymentMethod,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        verbose_name="Способ оплаты"
+    )
+    
+    # Детали платежа
+    amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        verbose_name="Сумма"
+    )
+    currency = models.CharField(
+        max_length=3,
+        default='BYN',
+        verbose_name="Валюта"
+    )
+    status = models.CharField(
+        max_length=20,
+        choices=STATUS_CHOICES,
+        default='pending',
+        verbose_name="Статус"
+    )
+    
+    # Внешние идентификаторы
+    payment_intent_id = models.CharField(
+        max_length=100,
+        unique=True,
+        verbose_name="ID платежного намерения"
+    )
+    transaction_id = models.CharField(
+        max_length=100,
+        blank=True,
+        verbose_name="ID транзакции"
+    )
+    
+    # Метаданные
+    description = models.TextField(
+        blank=True,
+        verbose_name="Описание"
+    )
+    failure_reason = models.TextField(
+        blank=True,
+        verbose_name="Причина неудачи"
+    )
+    provider_response = models.JSONField(
+        default=dict,
+        blank=True,
+        verbose_name="Ответ провайдера"
+    )
+    
+    # Даты
+    processed_at = models.DateTimeField(
+        null=True,
+        blank=True,
+        verbose_name="Дата обработки"
+    )
+    created_at = models.DateTimeField(auto_now_add=True, verbose_name="Создан")
+    updated_at = models.DateTimeField(auto_now=True, verbose_name="Обновлен")
+
+    class Meta:
+        verbose_name = "История платежей"
+        verbose_name_plural = "История платежей"
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['user', 'status']),
+            models.Index(fields=['payment_intent_id']),
+            models.Index(fields=['created_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.get_full_name()} - {self.amount} {self.currency} ({self.status})"
+
+    def mark_as_succeeded(self, transaction_id=None):
+        """Отмечает платеж как успешный."""
+        self.status = 'succeeded'
+        self.processed_at = timezone.now()
+        if transaction_id:
+            self.transaction_id = transaction_id
+        self.save()
+
+    def mark_as_failed(self, reason=None):
+        """Отмечает платеж как неудачный."""
+        self.status = 'failed'
+        self.processed_at = timezone.now()
+        if reason:
+            self.failure_reason = reason
+        self.save()

@@ -1,7 +1,10 @@
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from django.contrib.auth.password_validation import validate_password
-from .models import User, UserProfile, SubscriptionPlan, UserSubscription, UserFavoriteArticle
+from .models import (
+    User, UserProfile, SubscriptionPlan, UserSubscription, 
+    UserFavoriteArticle, UsageTracking, PaymentMethod, PaymentHistory
+)
 
 
 class UserRegistrationSerializer(serializers.ModelSerializer):
@@ -114,41 +117,24 @@ class PasswordChangeSerializer(serializers.Serializer):
 class SubscriptionPlanSerializer(serializers.ModelSerializer):
     """Сериализатор для планов подписки."""
     
-    features = serializers.SerializerMethodField()
+    limits = serializers.SerializerMethodField()
 
     class Meta:
         model = SubscriptionPlan
         fields = [
             'id', 'name', 'slug', 'plan_type', 'description',
-            'price', 'billing_period', 'features', 'is_popular'
+            'price', 'billing_period', 'features', 'is_popular', 
+            'is_active', 'limits', 'created_at', 'updated_at'
         ]
 
-    def get_features(self, obj):
-        """Возвращает список возможностей плана."""
-        features = []
-        
-        if obj.max_api_requests_per_day > 0:
-            features.append(f"До {obj.max_api_requests_per_day} API запросов в день")
-        
-        if obj.max_saved_articles > 0:
-            features.append(f"До {obj.max_saved_articles} сохраненных статей")
-        
-        if obj.max_custom_sources > 0:
-            features.append(f"До {obj.max_custom_sources} пользовательских источников")
-        
-        if obj.headless_parsing_enabled:
-            features.append("Headless парсинг SPA сайтов")
-        
-        if obj.advanced_analytics:
-            features.append("Расширенная аналитика и экспорт")
-        
-        if obj.api_access:
-            features.append("Полный доступ к API")
-        
-        if obj.priority_support:
-            features.append("Приоритетная поддержка")
-        
-        return features
+    def get_limits(self, obj):
+        """Возвращает лимиты плана."""
+        return {
+            'daily_articles': obj.daily_articles_limit,
+            'favorites': obj.favorites_limit,
+            'exports': obj.exports_limit,
+            'api_calls': obj.api_calls_limit,
+        }
 
 
 class UserSubscriptionSerializer(serializers.ModelSerializer):
@@ -194,4 +180,97 @@ class UserStatsSerializer(serializers.Serializer):
     subscription_days_remaining = serializers.IntegerField()
     api_requests_today = serializers.IntegerField()
     registration_date = serializers.DateTimeField()
-    last_activity = serializers.DateTimeField() 
+    last_activity = serializers.DateTimeField()
+
+
+class UsageTrackingSerializer(serializers.ModelSerializer):
+    """Сериализатор для отслеживания использования."""
+    
+    reset_date = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UsageTracking
+        fields = [
+            'daily_articles_read', 'daily_api_calls', 'monthly_exports',
+            'total_favorites', 'reset_date', 'last_daily_reset', 'last_monthly_reset'
+        ]
+        read_only_fields = ['last_daily_reset', 'last_monthly_reset']
+
+    def get_reset_date(self, obj):
+        """Возвращает дату следующего сброса дневных лимитов."""
+        from django.utils import timezone
+        from datetime import timedelta
+        
+        tomorrow = timezone.now().date() + timedelta(days=1)
+        return timezone.datetime.combine(tomorrow, timezone.datetime.min.time())
+
+
+class PaymentMethodSerializer(serializers.ModelSerializer):
+    """Сериализатор для способов оплаты."""
+    
+    expires = serializers.SerializerMethodField()
+    brand = serializers.CharField(source='card_brand', read_only=True)
+
+    class Meta:
+        model = PaymentMethod
+        fields = [
+            'id', 'type', 'last_four', 'brand', 'expires',
+            'is_default', 'is_active', 'created_at'
+        ]
+        read_only_fields = ['id', 'created_at']
+
+    def get_expires(self, obj):
+        """Возвращает дату истечения карты."""
+        if obj.expires_month and obj.expires_year:
+            return f"{obj.expires_month:02d}/{obj.expires_year}"
+        return None
+
+
+class PaymentHistorySerializer(serializers.ModelSerializer):
+    """Сериализатор для истории платежей."""
+    
+    payment_method_display = PaymentMethodSerializer(source='payment_method', read_only=True)
+
+    class Meta:
+        model = PaymentHistory
+        fields = [
+            'id', 'amount', 'currency', 'status', 'description',
+            'payment_intent_id', 'transaction_id', 'payment_method_display',
+            'processed_at', 'created_at'
+        ]
+        read_only_fields = ['id', 'created_at']
+
+
+class PaymentIntentSerializer(serializers.Serializer):
+    """Сериализатор для создания платежного намерения."""
+    
+    id = serializers.CharField()
+    amount = serializers.DecimalField(max_digits=10, decimal_places=2)
+    currency = serializers.CharField()
+    status = serializers.CharField()
+    payment_method = serializers.CharField()
+    client_secret = serializers.CharField(required=False)
+
+
+class UsageStatsSerializer(serializers.Serializer):
+    """Сериализатор для статистики использования (для фронтенда)."""
+    
+    daily_articles_read = serializers.IntegerField()
+    daily_articles_limit = serializers.IntegerField(allow_null=True)
+    favorites_count = serializers.IntegerField()
+    favorites_limit = serializers.IntegerField(allow_null=True)
+    exports_count = serializers.IntegerField()
+    exports_limit = serializers.IntegerField(allow_null=True)
+    api_calls_count = serializers.IntegerField()
+    api_calls_limit = serializers.IntegerField(allow_null=True)
+    reset_date = serializers.DateTimeField()
+
+
+class SubscriptionDashboardSerializer(serializers.Serializer):
+    """Сериализатор для данных дашборда подписки."""
+    
+    subscription = UserSubscriptionSerializer(allow_null=True)
+    usage = UsageStatsSerializer()
+    plans = SubscriptionPlanSerializer(many=True)
+    payment_methods = PaymentMethodSerializer(many=True)
+    recent_payments = PaymentHistorySerializer(many=True) 

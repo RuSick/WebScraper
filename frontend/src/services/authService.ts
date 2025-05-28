@@ -11,7 +11,11 @@ import {
   FavoriteArticle,
   UserStats,
   DashboardData,
-  AUTH_ENDPOINTS
+  AUTH_ENDPOINTS,
+  UsageStats,
+  PaymentMethod,
+  PaymentIntent,
+  SubscriptionDashboardData
 } from '../types/auth';
 
 // Create axios instance for auth
@@ -191,6 +195,90 @@ export const authService = {
 
   getCurrentToken(): string | null {
     return tokenManager.getToken();
+  }
+};
+
+// Subscription API methods
+export const subscriptionApi = {
+  // Get available subscription plans
+  getPlans: async (): Promise<SubscriptionPlan[]> => {
+    const response = await authApi.get('/api/auth/subscription-plans/');
+    return response.data.results || response.data;
+  },
+
+  // Get current user subscription
+  getCurrentSubscription: async (): Promise<UserSubscription | null> => {
+    const response = await authApi.get('/api/auth/subscription/current/');
+    return response.data;
+  },
+
+  // Get usage statistics
+  getUsageStats: async (): Promise<UsageStats> => {
+    const response = await authApi.get('/api/auth/subscription/usage/');
+    return response.data;
+  },
+
+  // Get subscription dashboard data
+  getDashboardData: async (): Promise<SubscriptionDashboardData> => {
+    const response = await authApi.get('/api/auth/subscription/dashboard/');
+    return response.data;
+  },
+
+  // Create payment intent for subscription upgrade
+  createPaymentIntent: async (planId: number, paymentMethod?: string): Promise<PaymentIntent> => {
+    const response = await authApi.post('/api/auth/subscription/upgrade/', {
+      plan_id: planId,
+      payment_method: paymentMethod
+    });
+    return response.data;
+  },
+
+  // Confirm payment and activate subscription
+  confirmPayment: async (paymentIntentId: string): Promise<UserSubscription> => {
+    const response = await authApi.post('/api/auth/subscription/confirm-payment/', {
+      payment_intent_id: paymentIntentId
+    });
+    return response.data;
+  },
+
+  // Cancel subscription
+  cancelSubscription: async (): Promise<void> => {
+    await authApi.post('/api/auth/subscription/cancel/');
+  },
+
+  // Reactivate subscription
+  reactivateSubscription: async (): Promise<UserSubscription> => {
+    const response = await authApi.post('/api/auth/subscription/reactivate/');
+    return response.data;
+  },
+
+  // Check if user can perform action based on limits
+  checkLimit: async (feature: 'articles' | 'favorites' | 'exports' | 'api'): Promise<boolean> => {
+    const response = await authApi.get(`/api/auth/subscription/check-limit/${feature}/`);
+    return response.data.allowed;
+  },
+
+  // Get payment methods
+  getPaymentMethods: async (): Promise<PaymentMethod[]> => {
+    const response = await authApi.get('/api/auth/subscription/payment-methods/');
+    return response.data;
+  },
+
+  // Add payment method
+  addPaymentMethod: async (paymentMethodData: any): Promise<PaymentMethod> => {
+    const response = await authApi.post('/api/auth/subscription/payment-methods/', paymentMethodData);
+    return response.data;
+  },
+
+  // Delete payment method
+  deletePaymentMethod: async (paymentMethodId: string): Promise<void> => {
+    await authApi.delete(`/api/auth/subscription/payment-methods/${paymentMethodId}/`);
+  },
+
+  // Get payment history
+  getPaymentHistory: async (): Promise<any[]> => {
+    const response = await authApi.get('/api/auth/subscription/payments/');
+    return response.data;
   }
 };
 

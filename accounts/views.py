@@ -10,12 +10,14 @@ from datetime import datetime, timedelta
 
 from .models import (
     User, UserProfile, SubscriptionPlan, UserSubscription,
-    UserFavoriteArticle, APIUsageLog
+    UserFavoriteArticle, APIUsageLog, UsageTracking, PaymentMethod, PaymentHistory
 )
 from .serializers import (
     UserRegistrationSerializer, UserLoginSerializer, UserSerializer,
     UserProfileSerializer, PasswordChangeSerializer, SubscriptionPlanSerializer,
-    UserSubscriptionSerializer, UserFavoriteArticleSerializer, UserStatsSerializer
+    UserSubscriptionSerializer, UserFavoriteArticleSerializer, UserStatsSerializer,
+    UsageStatsSerializer, SubscriptionDashboardSerializer, PaymentIntentSerializer,
+    PaymentMethodSerializer, PaymentHistorySerializer
 )
 
 
@@ -279,3 +281,291 @@ def dashboard_data(request):
             ).count()
         }
     })
+
+
+# Subscription Views
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def current_subscription(request):
+    """Получить текущую подписку пользователя."""
+    subscription = UserSubscription.objects.filter(
+        user=request.user,
+        status='active'
+    ).select_related('plan').first()
+    
+    if subscription:
+        return Response(UserSubscriptionSerializer(subscription).data)
+    else:
+        return Response(None)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def usage_stats(request):
+    """Получить статистику использования пользователя."""
+    user = request.user
+    
+    # Получаем или создаем tracking объект
+    usage_tracking, created = UsageTracking.objects.get_or_create(user=user)
+    
+    # Сбрасываем лимиты если нужно
+    usage_tracking.reset_daily_limits()
+    usage_tracking.reset_monthly_limits()
+    
+    # Получаем текущую подписку для лимитов
+    subscription = UserSubscription.objects.filter(
+        user=user,
+        status='active'
+    ).select_related('plan').first()
+    
+    # Формируем данные для фронтенда
+    stats_data = {
+        'daily_articles_read': usage_tracking.daily_articles_read,
+        'daily_articles_limit': subscription.plan.daily_articles_limit if subscription else 10,
+        'favorites_count': usage_tracking.total_favorites,
+        'favorites_limit': subscription.plan.favorites_limit if subscription else 10,
+        'exports_count': usage_tracking.monthly_exports,
+        'exports_limit': subscription.plan.exports_limit if subscription else 0,
+        'api_calls_count': usage_tracking.daily_api_calls,
+        'api_calls_limit': subscription.plan.api_calls_limit if subscription else 0,
+        'reset_date': timezone.datetime.combine(
+            timezone.now().date() + timedelta(days=1),
+            timezone.datetime.min.time()
+        ).isoformat()
+    }
+    
+    serializer = UsageStatsSerializer(stats_data)
+    return Response(serializer.data)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def subscription_dashboard(request):
+    """Получить все данные для дашборда подписки."""
+    user = request.user
+    
+    # Текущая подписка
+    subscription = UserSubscription.objects.filter(
+        user=user,
+        status='active'
+    ).select_related('plan').first()
+    
+    # Статистика использования
+    usage_tracking, created = UsageTracking.objects.get_or_create(user=user)
+    usage_tracking.reset_daily_limits()
+    usage_tracking.reset_monthly_limits()
+    
+    # Доступные планы
+    plans = SubscriptionPlan.objects.filter(is_active=True).order_by('price')
+    
+    # Способы оплаты
+    payment_methods = PaymentMethod.objects.filter(user=user, is_active=True)
+    
+    # Последние платежи
+    recent_payments = PaymentHistory.objects.filter(user=user).order_by('-created_at')[:5]
+    
+    # Формируем статистику для фронтенда
+    usage_stats = {
+        'daily_articles_read': usage_tracking.daily_articles_read,
+        'daily_articles_limit': subscription.plan.daily_articles_limit if subscription else 10,
+        'favorites_count': usage_tracking.total_favorites,
+        'favorites_limit': subscription.plan.favorites_limit if subscription else 10,
+        'exports_count': usage_tracking.monthly_exports,
+        'exports_limit': subscription.plan.exports_limit if subscription else 0,
+        'api_calls_count': usage_tracking.daily_api_calls,
+        'api_calls_limit': subscription.plan.api_calls_limit if subscription else 0,
+        'reset_date': timezone.datetime.combine(
+            timezone.now().date() + timedelta(days=1),
+            timezone.datetime.min.time()
+        ).isoformat()
+    }
+    
+    dashboard_data = {
+        'subscription': subscription,
+        'usage': usage_stats,
+        'plans': plans,
+        'payment_methods': payment_methods,
+        'recent_payments': recent_payments
+    }
+    
+    serializer = SubscriptionDashboardSerializer(dashboard_data)
+    return Response(serializer.data)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def upgrade_subscription(request):
+    """Создать платежное намерение для обновления подписки."""
+    plan_id = request.data.get('plan_id')
+    payment_method_id = request.data.get('payment_method')
+    
+    try:
+        plan = SubscriptionPlan.objects.get(id=plan_id, is_active=True)
+    except SubscriptionPlan.DoesNotExist:
+        return Response({
+            'error': 'План подписки не найден'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # Создаем платежное намерение (здесь будет интеграция с платежной системой)
+    import uuid
+    payment_intent_id = str(uuid.uuid4())
+    
+    # Создаем запись в истории платежей
+    payment_history = PaymentHistory.objects.create(
+        user=request.user,
+        subscription=None,  # Будет установлено после успешной оплаты
+        amount=plan.price,
+        currency='BYN',
+        payment_intent_id=payment_intent_id,
+        description=f"Подписка на план {plan.name}"
+    )
+    
+    # Возвращаем данные для фронтенда
+    payment_intent_data = {
+        'id': payment_intent_id,
+        'amount': plan.price,
+        'currency': 'BYN',
+        'status': 'pending',
+        'payment_method': payment_method_id or 'card',
+        'client_secret': f"pi_{payment_intent_id}_secret"
+    }
+    
+    serializer = PaymentIntentSerializer(payment_intent_data)
+    return Response(serializer.data)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def confirm_payment(request):
+    """Подтвердить платеж и активировать подписку."""
+    payment_intent_id = request.data.get('payment_intent_id')
+    
+    try:
+        payment = PaymentHistory.objects.get(
+            payment_intent_id=payment_intent_id,
+            user=request.user,
+            status='pending'
+        )
+    except PaymentHistory.DoesNotExist:
+        return Response({
+            'error': 'Платеж не найден'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # Здесь будет проверка статуса платежа в платежной системе
+    # Для демо просто помечаем как успешный
+    
+    # Находим план по описанию (в реальности лучше хранить plan_id)
+    plan_name = payment.description.split("план ")[-1]
+    try:
+        plan = SubscriptionPlan.objects.get(name=plan_name)
+    except SubscriptionPlan.DoesNotExist:
+        return Response({
+            'error': 'План подписки не найден'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    # Создаем или обновляем подписку
+    end_date = timezone.now()
+    if plan.billing_period == 'monthly':
+        end_date += timedelta(days=30)
+    elif plan.billing_period == 'yearly':
+        end_date += timedelta(days=365)
+    elif plan.billing_period == 'lifetime':
+        end_date += timedelta(days=365 * 100)  # 100 лет
+    
+    subscription = UserSubscription.objects.create(
+        user=request.user,
+        plan=plan,
+        status='active',
+        start_date=timezone.now(),
+        end_date=end_date,
+        amount_paid=payment.amount,
+        payment_method='card',
+        transaction_id=payment.payment_intent_id
+    )
+    
+    # Обновляем платеж
+    payment.subscription = subscription
+    payment.mark_as_succeeded(transaction_id=payment.payment_intent_id)
+    
+    return Response(UserSubscriptionSerializer(subscription).data)
+
+
+@api_view(['POST'])
+@permission_classes([permissions.IsAuthenticated])
+def cancel_subscription(request):
+    """Отменить подписку."""
+    subscription = UserSubscription.objects.filter(
+        user=request.user,
+        status='active'
+    ).first()
+    
+    if not subscription:
+        return Response({
+            'error': 'Активная подписка не найдена'
+        }, status=status.HTTP_404_NOT_FOUND)
+    
+    subscription.status = 'cancelled'
+    subscription.auto_renewal = False
+    subscription.save()
+    
+    return Response({
+        'message': 'Подписка отменена'
+    })
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def check_limit(request, feature):
+    """Проверить лимит для определенной функции."""
+    user = request.user
+    
+    # Получаем tracking
+    usage_tracking, created = UsageTracking.objects.get_or_create(user=user)
+    usage_tracking.reset_daily_limits()
+    usage_tracking.reset_monthly_limits()
+    
+    # Получаем подписку
+    subscription = UserSubscription.objects.filter(
+        user=user,
+        status='active'
+    ).select_related('plan').first()
+    
+    allowed = True
+    
+    if feature == 'articles':
+        limit = subscription.plan.daily_articles_limit if subscription else 10
+        if limit is not None:
+            allowed = usage_tracking.daily_articles_read < limit
+    elif feature == 'favorites':
+        limit = subscription.plan.favorites_limit if subscription else 10
+        if limit is not None:
+            allowed = usage_tracking.total_favorites < limit
+    elif feature == 'exports':
+        limit = subscription.plan.exports_limit if subscription else 0
+        if limit is not None:
+            allowed = usage_tracking.monthly_exports < limit
+    elif feature == 'api':
+        limit = subscription.plan.api_calls_limit if subscription else 0
+        if limit is not None:
+            allowed = usage_tracking.daily_api_calls < limit
+    
+    return Response({'allowed': allowed})
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def payment_methods_list(request):
+    """Список способов оплаты пользователя."""
+    payment_methods = PaymentMethod.objects.filter(user=request.user, is_active=True)
+    serializer = PaymentMethodSerializer(payment_methods, many=True)
+    return Response(serializer.data)
+
+
+@api_view(['GET'])
+@permission_classes([permissions.IsAuthenticated])
+def payment_history_list(request):
+    """История платежей пользователя."""
+    payments = PaymentHistory.objects.filter(user=request.user).order_by('-created_at')
+    serializer = PaymentHistorySerializer(payments, many=True)
+    return Response(serializer.data)

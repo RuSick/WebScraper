@@ -2,7 +2,7 @@
 
 ## Обзор
 
-MediaScope использует PostgreSQL в качестве основной базы данных. Система построена на Django ORM и включает две основные модели: `Source` (источники новостей) и `Article` (статьи).
+MediaScope использует PostgreSQL в качестве основной базы данных. Система построена на Django ORM и включает основные модели для новостей (`Source`, `Article`) и полноценную систему авторизации (`User`, `UserProfile`, `SubscriptionPlan`, `UserSubscription`, `FavoriteArticle`).
 
 ## Модели данных
 
@@ -99,6 +99,165 @@ MediaScope использует PostgreSQL в качестве основной 
 
 ---
 
+## Система авторизации
+
+### 3. User (Пользователи)
+
+Кастомная модель пользователя, расширяющая AbstractUser Django.
+
+#### Поля:
+
+| Поле | Тип | Описание | Ограничения |
+|------|-----|----------|-------------|
+| `id` | BigAutoField | Первичный ключ | AUTO_INCREMENT |
+| `email` | EmailField | Email адрес | UNIQUE, NOT NULL |
+| `username` | CharField(150) | Имя пользователя | UNIQUE, NOT NULL |
+| `first_name` | CharField(150) | Имя | NOT NULL |
+| `last_name` | CharField(150) | Фамилия | NOT NULL |
+| `is_email_verified` | BooleanField | Подтвержден ли email | DEFAULT: False |
+| `date_joined` | DateTimeField | Дата регистрации | AUTO_NOW_ADD |
+| `last_login` | DateTimeField | Последний вход | NULL |
+| `is_active` | BooleanField | Активен ли аккаунт | DEFAULT: True |
+| `is_staff` | BooleanField | Доступ к админке | DEFAULT: False |
+| `is_superuser` | BooleanField | Суперпользователь | DEFAULT: False |
+
+#### Методы:
+- `full_name` - Полное имя пользователя
+- `get_absolute_url()` - URL профиля пользователя
+
+#### Индексы:
+- Первичный ключ на `id`
+- Уникальный индекс на `email`
+- Уникальный индекс на `username`
+
+---
+
+### 4. UserProfile (Профили пользователей)
+
+Расширенная информация о пользователе и настройки.
+
+#### Поля:
+
+| Поле | Тип | Описание | Ограничения |
+|------|-----|----------|-------------|
+| `id` | BigAutoField | Первичный ключ | AUTO_INCREMENT |
+| `user` | OneToOneField | Ссылка на пользователя | CASCADE |
+| `avatar` | ImageField | Аватар пользователя | NULL, BLANK |
+| `bio` | TextField | Биография | BLANK |
+| `language` | CharField(2) | Язык интерфейса | Choices: ru, en, DEFAULT: ru |
+| `theme` | CharField(10) | Тема оформления | Choices: light, dark, auto, DEFAULT: auto |
+| `timezone` | CharField(50) | Часовой пояс | DEFAULT: Europe/Moscow |
+| `email_notifications` | BooleanField | Email уведомления | DEFAULT: True |
+| `newsletter_subscription` | BooleanField | Подписка на рассылку | DEFAULT: True |
+| `articles_read` | PositiveIntegerField | Прочитанных статей | DEFAULT: 0 |
+| `last_activity` | DateTimeField | Последняя активность | AUTO_NOW |
+| `created_at` | DateTimeField | Дата создания | AUTO_NOW_ADD |
+| `updated_at` | DateTimeField | Дата обновления | AUTO_NOW |
+
+#### Индексы:
+- Первичный ключ на `id`
+- Уникальный индекс на `user`
+- Индекс на `last_activity`
+
+---
+
+### 5. SubscriptionPlan (Планы подписок)
+
+Модель для управления планами подписок и их возможностями.
+
+#### Поля:
+
+| Поле | Тип | Описание | Ограничения |
+|------|-----|----------|-------------|
+| `id` | BigAutoField | Первичный ключ | AUTO_INCREMENT |
+| `name` | CharField(100) | Название плана | NOT NULL |
+| `slug` | SlugField(100) | URL-slug плана | UNIQUE, NOT NULL |
+| `plan_type` | CharField(20) | Тип плана | Choices, NOT NULL |
+| `description` | TextField | Описание плана | BLANK |
+| `price` | DecimalField(10,2) | Цена плана | NOT NULL |
+| `billing_period` | CharField(20) | Период оплаты | Choices, NOT NULL |
+| `features` | JSONField | Возможности плана | DEFAULT: list |
+| `is_popular` | BooleanField | Популярный план | DEFAULT: False |
+| `is_active` | BooleanField | Активен ли план | DEFAULT: True |
+| `created_at` | DateTimeField | Дата создания | AUTO_NOW_ADD |
+| `updated_at` | DateTimeField | Дата обновления | AUTO_NOW |
+
+#### Типы планов:
+- `free` - Бесплатный
+- `basic` - Базовый
+- `premium` - Премиум
+- `enterprise` - Корпоративный
+
+#### Периоды оплаты:
+- `monthly` - Ежемесячно
+- `yearly` - Ежегодно
+- `lifetime` - Пожизненно
+
+#### Индексы:
+- Первичный ключ на `id`
+- Уникальный индекс на `slug`
+- Индекс на `plan_type`
+
+---
+
+### 6. UserSubscription (Подписки пользователей)
+
+Модель для отслеживания активных подписок пользователей.
+
+#### Поля:
+
+| Поле | Тип | Описание | Ограничения |
+|------|-----|----------|-------------|
+| `id` | BigAutoField | Первичный ключ | AUTO_INCREMENT |
+| `user` | ForeignKey | Ссылка на пользователя | CASCADE |
+| `plan` | ForeignKey | Ссылка на план | CASCADE |
+| `status` | CharField(20) | Статус подписки | Choices, NOT NULL |
+| `start_date` | DateTimeField | Дата начала | NOT NULL |
+| `end_date` | DateTimeField | Дата окончания | NULL, BLANK |
+| `auto_renewal` | BooleanField | Автопродление | DEFAULT: False |
+| `created_at` | DateTimeField | Дата создания | AUTO_NOW_ADD |
+| `updated_at` | DateTimeField | Дата обновления | AUTO_NOW |
+
+#### Статусы подписки:
+- `active` - Активна
+- `expired` - Истекла
+- `cancelled` - Отменена
+- `pending` - Ожидает оплаты
+
+#### Методы:
+- `is_active` - Проверка активности подписки
+- `days_remaining` - Количество дней до окончания
+
+#### Индексы:
+- Первичный ключ на `id`
+- Индекс на `user`
+- Индекс на `status`
+- Индекс на `end_date`
+
+---
+
+### 7. FavoriteArticle (Избранные статьи)
+
+Модель для хранения избранных статей пользователей.
+
+#### Поля:
+
+| Поле | Тип | Описание | Ограничения |
+|------|-----|----------|-------------|
+| `id` | BigAutoField | Первичный ключ | AUTO_INCREMENT |
+| `user` | ForeignKey | Ссылка на пользователя | CASCADE |
+| `article` | ForeignKey | Ссылка на статью | CASCADE |
+| `notes` | TextField | Заметки пользователя | BLANK |
+| `created_at` | DateTimeField | Дата добавления | AUTO_NOW_ADD |
+
+#### Индексы:
+- Первичный ключ на `id`
+- Уникальный составной индекс на `(user, article)`
+- Индекс на `user`
+- Индекс на `created_at`
+
+---
+
 ## Связи между таблицами
 
 ### Source → Article (One-to-Many)
@@ -106,6 +265,36 @@ MediaScope использует PostgreSQL в качестве основной 
 - Связь через `Article.source` → `Source.id`
 - При удалении источника все его статьи удаляются (CASCADE)
 - Обратная связь: `source.articles.all()`
+
+### User → UserProfile (One-to-One)
+- Каждый пользователь имеет один профиль
+- Связь через `UserProfile.user` → `User.id`
+- При удалении пользователя профиль удаляется (CASCADE)
+- Обратная связь: `user.profile`
+
+### User → UserSubscription (One-to-Many)
+- Пользователь может иметь несколько подписок (история)
+- Связь через `UserSubscription.user` → `User.id`
+- При удалении пользователя подписки удаляются (CASCADE)
+- Обратная связь: `user.subscriptions.all()`
+
+### SubscriptionPlan → UserSubscription (One-to-Many)
+- План может быть у множества пользователей
+- Связь через `UserSubscription.plan` → `SubscriptionPlan.id`
+- При удалении плана подписки сохраняются (PROTECT)
+- Обратная связь: `plan.subscriptions.all()`
+
+### User → FavoriteArticle (One-to-Many)
+- Пользователь может иметь множество избранных статей
+- Связь через `FavoriteArticle.user` → `User.id`
+- При удалении пользователя избранное удаляется (CASCADE)
+- Обратная связь: `user.favorite_articles.all()`
+
+### Article → FavoriteArticle (One-to-Many)
+- Статья может быть в избранном у множества пользователей
+- Связь через `FavoriteArticle.article` → `Article.id`
+- При удалении статьи записи избранного удаляются (CASCADE)
+- Обратная связь: `article.favorited_by.all()`
 
 ---
 
@@ -130,9 +319,37 @@ MediaScope использует PostgreSQL в качестве основной 
 
 ### Основные миграции:
 
-1. **0001_initial.py** - Создание базовых таблиц
+#### Core приложение:
+1. **0001_initial.py** - Создание базовых таблиц (Source, Article)
 2. **0002_alter_article_options_alter_source_options_and_more.py** - Добавление полей аналитики и метаданных
 3. **0003_update_article_analysis.py** - Обновление системы анализа и расширение тем
+
+#### Accounts приложение:
+1. **accounts/0001_initial.py** - Создание системы авторизации:
+   - Кастомная модель User
+   - UserProfile с настройками пользователя
+   - SubscriptionPlan для планов подписок
+   - UserSubscription для отслеживания подписок
+   - FavoriteArticle для избранных статей
+
+### Порядок применения миграций:
+
+```bash
+# Применение всех миграций
+python manage.py migrate
+
+# Применение миграций по приложениям
+python manage.py migrate core
+python manage.py migrate accounts
+
+# Создание новых миграций при изменении моделей
+python manage.py makemigrations
+python manage.py makemigrations accounts
+```
+
+### Зависимости миграций:
+- `accounts.0001_initial` зависит от `core.0001_initial` (для связи FavoriteArticle → Article)
+- Все auth миграции должны применяться после создания базовых таблиц
 
 ---
 
@@ -152,10 +369,38 @@ MediaScope использует PostgreSQL в качестве основной 
 - `PUT/PATCH /api/articles/{id}/` - Обновление статьи
 - `DELETE /api/articles/{id}/` - Удаление статьи
 
+### Authentication API:
+- `POST /api/auth/register/` - Регистрация пользователя
+- `POST /api/auth/login/` - Вход в систему (получение JWT токена)
+- `POST /api/auth/logout/` - Выход из системы
+- `GET /api/auth/profile/` - Получение профиля пользователя
+- `PATCH /api/auth/profile/update/` - Обновление профиля
+- `POST /api/auth/change-password/` - Смена пароля
+- `GET /api/auth/stats/` - Статистика пользователя
+- `GET /api/auth/dashboard/` - Данные для дашборда
+
+### Subscription API:
+- `GET /api/auth/subscription-plans/` - Список планов подписок
+- `GET /api/auth/subscriptions/` - Подписки пользователя
+- `POST /api/auth/subscriptions/` - Создание подписки
+
+### Favorites API:
+- `GET /api/auth/favorites/` - Избранные статьи пользователя
+- `POST /api/auth/favorites/` - Добавление в избранное
+- `DELETE /api/auth/favorites/{id}/` - Удаление из избранного
+- `PATCH /api/auth/favorites/{id}/` - Обновление заметок
+- `POST /api/auth/articles/{id}/toggle-favorite/` - Переключение избранного
+- `GET /api/auth/articles/{id}/check-favorite/` - Проверка избранного
+
 ### Фильтрация и поиск:
 - **Поиск**: по title, content, summary, tags, locations
 - **Фильтры**: topic, source, is_featured, is_analyzed, published_at
 - **Сортировка**: published_at, created_at, read_count
+
+### Аутентификация:
+- **JWT токены** для авторизации API запросов
+- **Token-based authentication** с автоматическим обновлением
+- **Защищенные endpoints** требуют заголовок `Authorization: Token <jwt_token>`
 
 ---
 
@@ -187,6 +432,27 @@ MediaScope использует PostgreSQL в качестве основной 
 - Административный интерфейс для управления источниками
 - Логирование всех операций парсинга
 
+### Аутентификация и авторизация:
+- **JWT токены** для безопасной аутентификации
+- **Хеширование паролей** с использованием Django PBKDF2
+- **Валидация email** при регистрации
+- **Уникальность username и email** на уровне базы данных
+- **Автоматическое истечение токенов** при неактивности
+- **Защита от CSRF** для всех форм
+- **Rate limiting** для API endpoints (планируется)
+
+### Защита данных пользователей:
+- **Шифрование паролей** в базе данных
+- **Валидация сложности паролей** на клиенте и сервере
+- **Безопасное хранение JWT токенов** в localStorage (с автоочисткой)
+- **Логирование попыток входа** для мониторинга безопасности
+- **Автоматический logout** при обнаружении 401 ошибок
+
+### Приватность:
+- **Изоляция данных пользователей** - каждый видит только свои избранные и статистику
+- **Опциональные уведомления** - пользователь контролирует email рассылки
+- **Удаление данных** при деактивации аккаунта (CASCADE)
+
 ---
 
 ## Мониторинг
@@ -197,10 +463,23 @@ MediaScope использует PostgreSQL в качестве основной 
 - Производительность парсинга
 - Ошибки анализа текста
 
+### Метрики пользователей:
+- **Регистрации** - количество новых пользователей по дням/неделям
+- **Активность** - количество активных пользователей (DAU/MAU)
+- **Избранные статьи** - популярность контента
+- **Подписки** - конверсия в платные планы
+- **API запросы** - нагрузка на систему по пользователям
+- **Время сессий** - продолжительность использования
+
 ### Логирование:
 - Все операции парсинга
 - Ошибки сохранения статей
-- Результаты NLP анализа 
+- Результаты NLP анализа
+- **Попытки входа** (успешные и неуспешные)
+- **Регистрации пользователей**
+- **Смены паролей**
+- **API запросы** с метаданными пользователя
+- **Ошибки аутентификации** (401, 403)
 
 ---
 
