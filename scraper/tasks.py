@@ -159,6 +159,10 @@ def analyze_article_text(article_id: int) -> Dict[str, Any]:
     
     Определяет тему, теги и локации с помощью NLP-анализа
     и сохраняет результаты в БД.
+    
+    Поддерживает два типа анализаторов:
+    - spaCy (ML-based) - более точный, медленнее
+    - Legacy (dictionary-based) - быстрый, менее точный
     """
     try:
         article = Article.objects.get(id=article_id)
@@ -169,8 +173,30 @@ def analyze_article_text(article_id: int) -> Dict[str, Any]:
         
         logger.info(f"Начинаем анализ статьи: {article.title} (ID: {article_id})")
         
-        # Выполняем NLP-анализ
-        result = analyze_article_content(article)
+        # Выбираем анализатор на основе настроек
+        from django.conf import settings
+        use_spacy = getattr(settings, 'USE_SPACY_ANALYZER', False)
+        
+        if use_spacy:
+            try:
+                # Используем spaCy анализатор
+                from core.spacy_analyzer import analyze_article_content_spacy
+                result = analyze_article_content_spacy(article)
+                analyzer_type = 'spacy'
+                logger.info(f"Использован spaCy анализатор для статьи {article_id}")
+            except Exception as e:
+                logger.error(f"Ошибка spaCy анализатора: {e}")
+                # Fallback на legacy анализатор
+                from core.text_analyzer import analyze_article_content
+                result = analyze_article_content(article)
+                analyzer_type = 'legacy_fallback'
+                logger.info(f"Переключились на legacy анализатор для статьи {article_id}")
+        else:
+            # Используем legacy анализатор
+            from core.text_analyzer import analyze_article_content
+            result = analyze_article_content(article)
+            analyzer_type = 'legacy'
+            logger.info(f"Использован legacy анализатор для статьи {article_id}")
         
         # Обновляем статью с результатами анализа
         article.topic = result['topic']
@@ -179,18 +205,27 @@ def analyze_article_text(article_id: int) -> Dict[str, Any]:
         article.is_analyzed = True
         article.save(update_fields=['topic', 'tags', 'locations', 'is_analyzed'])
         
-        logger.info(f"Анализ завершен для статьи {article_id}: "
+        # Подготавливаем результат для логирования
+        entities_info = ""
+        if 'entities' in result and result['entities']:
+            entities_count = len(result['entities'])
+            entities_info = f", сущностей={entities_count}"
+        
+        logger.info(f"Анализ завершен для статьи {article_id} ({analyzer_type}): "
                    f"тема={result['topic']}, тегов={len(result['tags'])}, "
-                   f"локаций={len(result['locations'])}")
+                   f"локаций={len(result['locations'])}{entities_info}")
         
         return {
             'status': 'success',
             'article_id': article_id,
+            'analyzer_type': analyzer_type,
             'topic': result['topic'],
             'tags_count': len(result['tags']),
             'locations_count': len(result['locations']),
+            'entities_count': len(result.get('entities', [])),
             'tags': result['tags'][:5],  # Первые 5 тегов для логирования
-            'locations': result['locations'][:3]  # Первые 3 локации
+            'locations': result['locations'][:3],  # Первые 3 локации
+            'entities': [ent['text'] for ent in result.get('entities', [])][:3]  # Первые 3 сущности
         }
         
     except Article.DoesNotExist:

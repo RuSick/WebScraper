@@ -225,3 +225,17 @@ HEADLESS_TIMEOUT = 30
 # Список известных SPA-сайтов будет автоматически обрабатываться через headless
 # когда ENABLE_HEADLESS_PARSING = True
 # Текущий список: meduza.io, tjournal.ru, vc.ru, dtf.ru
+
+# =============================================================================
+# NLP ANALYSIS CONFIGURATION
+# =============================================================================
+
+# Text analyzer selection
+# Options: 'spacy' (ML-based) or 'legacy' (dictionary-based)
+USE_SPACY_ANALYZER = True
+
+# spaCy model configuration
+SPACY_MODEL_NAME = 'ru_core_news_sm'
+
+# Fallback to legacy analyzer if spaCy fails
+SPACY_FALLBACK_ENABLED = True

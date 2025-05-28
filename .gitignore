@@ -60,4 +60,5 @@ logs/
 *.log
 
 # AI Assistant Documentation (internal use only)
-AI_ASSISTANT_README.md 
+AI_ASSISTANT_README.md
+DIPLOMA_PROJECT_DESCRIPTION.md 
