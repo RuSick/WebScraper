@@ -6,7 +6,6 @@ import { FavoritesProvider } from './contexts/FavoritesContext';
 import { Header } from './components/Header';
 import { Footer } from './components/Footer';
 import { HomePage } from './pages/HomePage';
-import './App.css';
 
 // Create a client
 const queryClient = new QueryClient({

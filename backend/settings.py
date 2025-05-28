@@ -58,10 +58,11 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = 'backend.urls'
 
+# Минимальные настройки шаблонов для Django админки
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
-        'DIRS': [BASE_DIR / 'templates'],
+        'DIRS': [],  # Пустой список - шаблоны не используются
         'APP_DIRS': True,
         'OPTIONS': {
             'context_processors': [
@@ -126,9 +127,9 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/4.2/howto/static-files/
 
 STATIC_URL = 'static/'
-STATICFILES_DIRS = [
-    BASE_DIR / 'static',
-]
+# STATICFILES_DIRS = [
+#     BASE_DIR / 'static',  # Удалено - старые статические файлы больше не нужны
+# ]
 STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # CORS settings (для фронтенда)

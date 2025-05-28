@@ -16,28 +16,14 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
-from django.conf import settings
-from django.conf.urls.static import static
-from django.views.generic import TemplateView
 from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView, SpectacularRedocView
-
-class DemoView(TemplateView):
-    template_name = 'demo/index.html'
 
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/', include('api.urls')),  
-    
-    # Демонстрация фронтенда
-    path('', DemoView.as_view(), name='demo'),
-    path('demo/', DemoView.as_view(), name='demo-page'),
     
     # OpenAPI документация
     path('api/schema/', SpectacularAPIView.as_view(), name='schema'),
     path('api/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
     path('api/redoc/', SpectacularRedocView.as_view(url_name='schema'), name='redoc'),
 ]
-
-# Обслуживание статических файлов в режиме разработки
-if settings.DEBUG:
-    urlpatterns += static(settings.STATIC_URL, document_root=settings.STATICFILES_DIRS[0])
