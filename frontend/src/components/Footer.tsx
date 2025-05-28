@@ -1,62 +1,85 @@
 import React from 'react';
-import { Github, Heart } from 'lucide-react';
+import { Github, Mail, Globe, Zap, Database, Brain } from 'lucide-react';
 
 export const Footer: React.FC = () => {
   return (
-    <footer className="bg-white border-t border-gray-200 mt-auto">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="flex flex-col md:flex-row justify-between items-center gap-4">
-          {/* Left side */}
-          <div className="flex flex-col items-center md:items-start">
-            <h3 className="text-lg font-semibold text-gray-900">MediaScope</h3>
-            <p className="text-sm text-gray-600 mt-1">
-              Новостная аналитика с использованием spaCy NLP
+    <footer className="bg-gradient-to-r from-gray-50 to-gray-100 dark:from-dark-900 dark:to-black border-t border-gray-200 dark:border-dark-700 mt-16">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {/* Brand Section */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 bg-gradient-to-br from-primary-500 to-primary-700 rounded-xl flex items-center justify-center shadow-lg">
+                <Globe className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">MediaScope</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400">Новостная аналитика</p>
+              </div>
+            </div>
+            <p className="text-gray-600 dark:text-gray-300 text-sm leading-relaxed">
+              Система агрегации и анализа новостей с использованием машинного обучения для выявления трендов и инсайтов.
             </p>
           </div>
 
-          {/* Center */}
-          <div className="flex items-center gap-2 text-sm text-gray-600">
-            <span>Сделано с</span>
-            <Heart className="w-4 h-4 text-red-500 fill-current" />
-            <span>для дипломного проекта</span>
+          {/* Tech Stack */}
+          <div className="space-y-4">
+            <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Технологии</h4>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                <Database className="w-4 h-4 text-blue-500" />
+                Django + PostgreSQL
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                <Brain className="w-4 h-4 text-green-500" />
+                spaCy NLP
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                <Zap className="w-4 h-4 text-yellow-500" />
+                React + TypeScript
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300">
+                <Globe className="w-4 h-4 text-purple-500" />
+                Tailwind CSS
+              </div>
+            </div>
           </div>
 
-          {/* Right side */}
-          <div className="flex items-center gap-4">
-            <a
-              href="https://github.com/RuSick/WebScraper"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-900 transition-colors"
-            >
-              <Github className="w-4 h-4" />
-              <span className="text-sm">GitHub</span>
-            </a>
-            
-            <div className="text-sm text-gray-500">
-              © 2025 MediaScope
+          {/* Contact & Links */}
+          <div className="space-y-4">
+            <h4 className="text-lg font-semibold text-gray-900 dark:text-white">Контакты</h4>
+            <div className="space-y-3">
+              <a 
+                href="mailto:contact@mediascope.ru" 
+                className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors duration-200"
+              >
+                <Mail className="w-4 h-4" />
+                contact@mediascope.ru
+              </a>
+              <a 
+                href="https://github.com/mediascope" 
+                className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors duration-200"
+              >
+                <Github className="w-4 h-4" />
+                GitHub Repository
+              </a>
             </div>
           </div>
         </div>
 
-        {/* Tech stack */}
-        <div className="mt-6 pt-6 border-t border-gray-200">
-          <div className="flex flex-wrap justify-center gap-4 text-xs text-gray-500">
-            <span>Django 4.2</span>
-            <span>•</span>
-            <span>React 18</span>
-            <span>•</span>
-            <span>TypeScript</span>
-            <span>•</span>
-            <span>Tailwind CSS</span>
-            <span>•</span>
-            <span>spaCy NLP</span>
-            <span>•</span>
-            <span>PostgreSQL</span>
-            <span>•</span>
-            <span>Redis</span>
-            <span>•</span>
-            <span>Celery</span>
+        {/* Bottom Bar */}
+        <div className="mt-8 pt-8 border-t border-gray-200 dark:border-dark-700">
+          <div className="flex flex-col sm:flex-row justify-between items-center gap-4">
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              © 2024 MediaScope. Все права защищены.
+            </p>
+            <div className="flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
+              <span>Версия 1.0.0</span>
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span>Система активна</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -1,0 +1,30 @@
+{
+  "name": "mediascope",
+  "version": "1.0.0",
+  "description": "MediaScope - система агрегации и анализа новостей",
+  "scripts": {
+    "dev": "concurrently \"npm run backend\" \"npm run frontend\"",
+    "frontend": "cd frontend && npm start",
+    "backend": "/home/rusick/.pyenv/shims/python manage.py runserver",
+    "install-frontend": "cd frontend && npm install",
+    "build-frontend": "cd frontend && npm run build",
+    "test-frontend": "cd frontend && npm test",
+    "lint-frontend": "cd frontend && npm run lint",
+    "setup": "npm run install-frontend",
+    "start": "npm run dev"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2"
+  },
+  "keywords": [
+    "news",
+    "analytics",
+    "django",
+    "react",
+    "typescript",
+    "nlp",
+    "spacy"
+  ],
+  "author": "MediaScope Team",
+  "license": "MIT"
+} 

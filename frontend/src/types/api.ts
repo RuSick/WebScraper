@@ -93,12 +93,16 @@ export interface ArticleFilters {
   page?: number;
   page_size?: number;
   search?: string;
-  topic?: TopicType;
+  topic?: TopicType | '';
   source?: number;
   analyzed?: boolean;
+  is_analyzed?: boolean;
   tags?: string;
   is_featured?: boolean;
   ordering?: string;
+  favorites?: boolean;
+  date_from?: string;
+  date_to?: string;
 }
 
 // API endpoints

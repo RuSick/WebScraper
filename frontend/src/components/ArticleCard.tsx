@@ -1,208 +1,177 @@
 import React, { useState } from 'react';
-import { Article, TopicType } from '../types/api';
-import { Clock, ExternalLink, Tag, MapPin, Eye } from 'lucide-react';
+import { Calendar, Tag, MapPin, ExternalLink, Star, Eye } from 'lucide-react';
+import { Article } from '../types/api';
 import { ArticleModal } from './ArticleModal';
+import { useFavorites } from '../contexts/FavoritesContext';
 
 interface ArticleCardProps {
   article: Article;
-  onClick?: () => void;
-  showFullContent?: boolean;
+  className?: string;
+  style?: React.CSSProperties;
 }
 
-const topicLabels: Record<TopicType, string> = {
-  politics: 'Политика',
-  economics: 'Экономика',
-  technology: 'Технологии',
-  science: 'Наука',
-  sports: 'Спорт',
-  culture: 'Культура',
-  health: 'Здоровье',
-  education: 'Образование',
-  environment: 'Экология',
-  society: 'Общество',
-  war: 'Война',
-  international: 'Международные отношения',
-  business: 'Бизнес',
-  finance: 'Финансы',
-  entertainment: 'Развлечения',
-  travel: 'Путешествия',
-  food: 'Еда',
-  fashion: 'Мода',
-  auto: 'Автомобили',
-  real_estate: 'Недвижимость',
-  other: 'Прочее',
-};
+export const ArticleCard: React.FC<ArticleCardProps> = ({ article, className = '', style }) => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const { toggleFavorite, isFavorite } = useFavorites();
+  const isArticleFavorite = isFavorite(article.id);
 
-const getTopicColor = (topic: TopicType): string => {
-  const colors: Record<TopicType, string> = {
-    politics: 'topic-politics',
-    economics: 'topic-economics',
-    technology: 'topic-technology',
-    science: 'topic-science',
-    business: 'topic-economics',
-    finance: 'topic-economics',
-    war: 'topic-politics',
-    international: 'topic-politics',
-    other: 'topic-other',
-    sports: 'topic-other',
-    culture: 'topic-other',
-    health: 'topic-other',
-    education: 'topic-other',
-    environment: 'topic-other',
-    society: 'topic-other',
-    entertainment: 'topic-other',
-    travel: 'topic-other',
-    food: 'topic-other',
-    fashion: 'topic-other',
-    auto: 'topic-other',
-    real_estate: 'topic-other',
-  };
-  return colors[topic] || 'topic-other';
-};
-
-const formatDate = (dateString: string): string => {
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffInHours = Math.floor((now.getTime() - date.getTime()) / (1000 * 60 * 60));
-  
-  if (diffInHours < 1) {
-    return 'Только что';
-  } else if (diffInHours < 24) {
-    return `${diffInHours} ч. назад`;
-  } else if (diffInHours < 48) {
-    return 'Вчера';
-  } else {
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
     return date.toLocaleDateString('ru-RU', {
       day: 'numeric',
       month: 'short',
-      year: date.getFullYear() !== now.getFullYear() ? 'numeric' : undefined,
+      hour: '2-digit',
+      minute: '2-digit',
     });
-  }
-};
-
-export const ArticleCard: React.FC<ArticleCardProps> = ({ 
-  article, 
-  onClick, 
-  showFullContent = false 
-}) => {
-  const [isModalOpen, setIsModalOpen] = useState(false);
-
-  const handleCardClick = (e: React.MouseEvent) => {
-    e.preventDefault();
-    if (onClick) {
-      onClick();
-    } else {
-      setIsModalOpen(true);
-    }
   };
 
-  const handleExternalClick = (e: React.MouseEvent) => {
+  const getTopicLabel = (topic: string) => {
+    const topicLabels: Record<string, string> = {
+      technology: 'Технологии',
+      politics: 'Политика',
+      economics: 'Экономика',
+      science: 'Наука',
+      business: 'Бизнес',
+      war: 'Война',
+      other: 'Прочее',
+    };
+    return topicLabels[topic] || topic;
+  };
+
+  const getTopicColor = (topic: string) => {
+    const colors: Record<string, string> = {
+      technology: 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300',
+      politics: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+      economics: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+      science: 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300',
+      business: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+      war: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300',
+      other: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300',
+    };
+    return colors[topic] || colors.other;
+  };
+
+  const handleFavoriteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    window.open(article.url, '_blank');
+    toggleFavorite(article.id);
   };
 
   return (
     <>
       <article 
-        className="card hover:shadow-lg transition-shadow duration-300 cursor-pointer group"
-        onClick={handleCardClick}
+        className={`group bg-white dark:bg-dark-800 rounded-xl shadow-sm hover:shadow-lg dark:shadow-dark-900/20 border border-gray-200 dark:border-dark-700 transition-all duration-300 hover:scale-[1.02] cursor-pointer animate-fade-in ${className}`}
+        onClick={() => setIsModalOpen(true)}
+        style={style}
       >
         {/* Header */}
         <div className="p-4 pb-3">
-          <div className="flex items-start justify-between mb-3">
-            <div className="flex items-center gap-2 text-sm text-gray-600">
-              <span className="font-medium text-primary-600">{article.source.name}</span>
-              <span>•</span>
-              <div className="flex items-center gap-1">
-                <Clock className="w-3 h-3" />
-                <time dateTime={article.published_at}>
-                  {formatDate(article.published_at)}
-                </time>
-              </div>
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className={`px-2 py-1 rounded-lg text-xs font-medium ${getTopicColor(article.topic)}`}>
+                {getTopicLabel(article.topic)}
+              </span>
+              {article.is_analyzed && (
+                <span className="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded-lg text-xs font-medium">
+                  ✨ Анализ
+                </span>
+              )}
             </div>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={handleExternalClick}
-                className="p-1 text-gray-400 hover:text-primary-600 transition-colors"
-                title="Открыть оригинал"
-              >
-                <ExternalLink className="w-4 h-4" />
-              </button>
-              <button
-                onClick={handleCardClick}
-                className="p-1 text-gray-400 hover:text-primary-600 transition-colors"
-                title="Подробнее"
-              >
-                <Eye className="w-4 h-4" />
-              </button>
-            </div>
+            
+            <button
+              onClick={handleFavoriteClick}
+              className={`p-1.5 rounded-lg transition-all duration-200 hover:scale-110 ${
+                isArticleFavorite 
+                  ? 'text-yellow-500 hover:text-yellow-600' 
+                  : 'text-gray-400 dark:text-gray-500 hover:text-yellow-500'
+              }`}
+              aria-label={isArticleFavorite ? 'Удалить из избранного' : 'Добавить в избранное'}
+            >
+              <Star className={`w-4 h-4 ${isArticleFavorite ? 'fill-current' : ''}`} />
+            </button>
           </div>
 
-          {/* Title */}
-          <h2 className="text-lg font-semibold text-gray-900 mb-3 line-clamp-2 group-hover:text-primary-700 transition-colors">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3 line-clamp-2 group-hover:text-primary-600 dark:group-hover:text-primary-400 transition-colors duration-200">
             {article.title}
-          </h2>
+          </h3>
 
-          {/* Content */}
-          <p className="text-gray-600 text-sm leading-relaxed mb-4 line-clamp-3">
-            {showFullContent ? article.content : article.short_content}
-          </p>
+          {article.summary && (
+            <p className="text-gray-600 dark:text-gray-300 text-sm line-clamp-3 mb-4 leading-relaxed">
+              {article.summary}
+            </p>
+          )}
         </div>
 
-        {/* Footer */}
-        <div className="px-4 pb-4">
-          {/* Topic and Tags */}
-          <div className="flex flex-wrap items-center gap-2 mb-3">
-            <span className={`tag ${getTopicColor(article.topic)}`}>
-              {topicLabels[article.topic]}
-            </span>
-            
-            {article.tags.slice(0, 3).map((tag, index) => (
-              <span key={index} className="tag">
-                <Tag className="w-3 h-3 mr-1" />
-                {tag}
-              </span>
-            ))}
-            
-            {article.tags.length > 3 && (
-              <span className="text-xs text-gray-500">
-                +{article.tags.length - 3} еще
-              </span>
-            )}
+        {/* Tags */}
+        {article.tags && article.tags.length > 0 && (
+          <div className="px-4 pb-3">
+            <div className="flex items-center gap-1 mb-2">
+              <Tag className="w-3 h-3 text-gray-400 dark:text-gray-500" />
+              <span className="text-xs text-gray-500 dark:text-gray-400">Теги:</span>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {article.tags.slice(0, 4).map((tag, index) => (
+                <span
+                  key={index}
+                  className="px-2 py-1 bg-gray-100 dark:bg-dark-700 text-gray-700 dark:text-gray-300 rounded text-xs hover:bg-gray-200 dark:hover:bg-dark-600 transition-colors duration-200"
+                >
+                  {tag}
+                </span>
+              ))}
+              {article.tags.length > 4 && (
+                <span className="px-2 py-1 text-gray-500 dark:text-gray-400 text-xs">
+                  +{article.tags.length - 4}
+                </span>
+              )}
+            </div>
           </div>
+        )}
 
-          {/* Locations */}
-          {article.locations.length > 0 && (
-            <div className="flex items-center gap-1 text-xs text-gray-500 mb-3">
-              <MapPin className="w-3 h-3" />
-              <span>{article.locations.slice(0, 2).join(', ')}</span>
-              {article.locations.length > 2 && (
-                <span>+{article.locations.length - 2}</span>
+        {/* Locations */}
+        {article.locations && article.locations.length > 0 && (
+          <div className="px-4 pb-3">
+            <div className="flex items-center gap-1 mb-2">
+              <MapPin className="w-3 h-3 text-gray-400 dark:text-gray-500" />
+              <span className="text-xs text-gray-500 dark:text-gray-400">Локации:</span>
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {article.locations.slice(0, 3).map((location, index) => (
+                <span
+                  key={index}
+                  className="px-2 py-1 bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 rounded text-xs"
+                >
+                  📍 {location}
+                </span>
+              ))}
+              {article.locations.length > 3 && (
+                <span className="px-2 py-1 text-gray-500 dark:text-gray-400 text-xs">
+                  +{article.locations.length - 3}
+                </span>
               )}
             </div>
-          )}
+          </div>
+        )}
 
-          {/* Analysis indicator */}
-          <div className="flex items-center justify-between pt-3 border-t border-gray-100">
+        {/* Footer */}
+        <div className="px-4 py-3 bg-gray-50 dark:bg-dark-700/50 rounded-b-xl border-t border-gray-100 dark:border-dark-600">
+          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-1">
+                <Calendar className="w-3 h-3" />
+                <span>{formatDate(article.published_at)}</span>
+              </div>
+              
+              <div className="flex items-center gap-1">
+                <Eye className="w-3 h-3" />
+                <span>{article.read_count}</span>
+              </div>
+            </div>
+
             <div className="flex items-center gap-2">
-              {article.is_analyzed ? (
-                <>
-                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                  <span className="text-xs text-gray-500">Проанализировано spaCy</span>
-                </>
-              ) : (
-                <>
-                  <div className="w-2 h-2 bg-gray-300 rounded-full"></div>
-                  <span className="text-xs text-gray-500">Ожидает анализа</span>
-                </>
-              )}
-            </div>
-            
-            {article.is_featured && (
-              <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded-full">
-                Рекомендуемое
+              <span className="text-primary-600 dark:text-primary-400 font-medium">
+                {article.source.name}
               </span>
-            )}
+              <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity duration-200" />
+            </div>
           </div>
         </div>
       </article>
@@ -215,6 +184,4 @@ export const ArticleCard: React.FC<ArticleCardProps> = ({
       />
     </>
   );
-};
-
-export default ArticleCard; 
+}; 
